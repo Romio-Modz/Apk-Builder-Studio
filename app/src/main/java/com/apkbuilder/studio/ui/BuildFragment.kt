@@ -221,7 +221,7 @@ class BuildFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.artifacts.collect { arts ->
+                viewModel.artifacts.collect { arts: List<com.apkbuilder.studio.data.ArtifactInfo> ->
                     if (arts.isNotEmpty()) {
                         binding.btnDownloadApk.visibility = View.VISIBLE
                         binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
