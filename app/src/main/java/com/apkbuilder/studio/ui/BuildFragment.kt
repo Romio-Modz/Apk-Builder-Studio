@@ -94,7 +94,23 @@ class BuildFragment : Fragment() {
             binding.tvBuildTypeLabel.text = if (isChecked) "Release Build" else "Debug Build"
         }
 
+        // Read GitHub field values when Start Build is pressed
         binding.btnStartBuild.setOnClickListener {
+            // Read all field values right before building
+            viewModel.updateGithubToken(binding.etGithubToken.text.toString())
+            viewModel.updateGithubUser(binding.etGithubUser.text.toString())
+            viewModel.updateRepoName(binding.etRepoName.text.toString())
+            viewModel.updateBranch(binding.etBranch.text.toString())
+            viewModel.updateAppName(binding.etAppName.text.toString())
+            viewModel.updatePackageName(binding.etPackageName.text.toString())
+            viewModel.updateVersionName(binding.etVersionName.text.toString())
+            val vCode = binding.etVersionCode.text.toString().toIntOrNull() ?: 1
+            viewModel.updateVersionCode(vCode)
+            val minS = binding.etMinSdk.text.toString().toIntOrNull() ?: 24
+            viewModel.updateMinSdk(minS)
+            val tgtS = binding.etTargetSdk.text.toString().toIntOrNull() ?: 34
+            viewModel.updateTargetSdk(tgtS)
+
             val isRelease = binding.switchRelease.isChecked
             binding.buildProgressCard.visibility = View.VISIBLE
             viewModel.startRealBuild(requireContext(), isRelease)
