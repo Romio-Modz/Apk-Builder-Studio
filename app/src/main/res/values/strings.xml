@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APK Builder Studio</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_build">Build</string>
+    <string name="nav_history">History</string>
+
+    <!-- Home -->
+    <string name="welcome_title">APK Builder Studio</string>
+    <string name="welcome_subtitle">Build Android APKs from your source code with Material Design 3</string>
+    <string name="new_build">New Build</string>
+    <string name="build_history">Build History</string>
+    <string name="total_builds">Total Builds</string>
+    <string name="successful_builds">Successful</string>
+
+    <!-- Build -->
+    <string name="repo_url">Repository URL</string>
+    <string name="repo_url_hint">https://github.com/user/repo</string>
+    <string name="branch">Branch</string>
+    <string name="branch_hint">main</string>
+    <string name="app_name_input">App Name</string>
+    <string name="package_name">Package Name</string>
+    <string name="version_name">Version Name</string>
+    <string name="version_code">Version Code</string>
+    <string name="min_sdk">Min SDK</string>
+    <string name="target_sdk">Target SDK</string>
+    <string name="upload_files">Upload Files</string>
+    <string name="upload_file">Upload File</string>
+    <string name="clear_files">Clear</string>
+    <string name="build_type_debug">Debug Build</string>
+    <string name="build_type_release">Release Build</string>
+    <string name="start_build">Start Build</string>
+    <string name="cancel_build">Cancel</string>
+    <string name="build_progress">Build Progress</string>
+    <string name="build_log">Build Log</string>
+
+    <!-- History -->
+    <string name="no_builds_yet">No builds yet</string>
+    <string name="start_your_first">Start your first build from the Build tab</string>
+
+    <!-- Common -->
+    <string name="delete">Delete</string>
+    <string name="download">Download APK</string>
+</resources>
