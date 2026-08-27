@@ -29,18 +29,8 @@
         <item name="colorOnSurfaceVariant">@color/md_on_surface_variant</item>
         <item name="colorOutline">@color/md_outline</item>
         <item name="colorOutlineVariant">@color/md_outline_variant</item>
-        <item name="colorScrim">@color/md_scrim</item>
-        <item name="colorInverseSurface">@color/md_inverse_surface</item>
-        <item name="colorInverseOnSurface">@color/md_inverse_on_surface</item>
-        <item name="colorInversePrimary">@color/md_inverse_primary</item>
     </style>
 
-    <style name="Theme.APKBuilderStudio.ActionBar" parent="Theme.APKBuilderStudio">
-        <item name="windowActionBar">true</item>
-        <item name="windowNoTitle">false</item>
-    </style>
-
-    <!-- Custom Component Styles -->
     <style name="Widget.APKBuilder.CardView" parent="Widget.Material3.CardView.Elevated">
         <item name="cardCornerRadius">24dp</item>
         <item name="cardElevation">3dp</item>
@@ -62,14 +52,14 @@
     </style>
 
     <style name="TextAppearance.APKBuilder.Headline" parent="TextAppearance.Material3.HeadlineMedium">
-        <item name="fontWeight">700</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 
     <style name="TextAppearance.APKBuilder.Title" parent="TextAppearance.Material3.TitleLarge">
-        <item name="fontWeight">600</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 
     <style name="TextAppearance.APKBuilder.Label" parent="TextAppearance.Material3.LabelLarge">
-        <item name="fontWeight">500</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 </resources>

@@ -29,8 +29,5 @@
         <item name="colorOnSurfaceVariant">@color/md_on_surface_variant_dark</item>
         <item name="colorOutline">@color/md_outline_dark</item>
         <item name="colorOutlineVariant">@color/md_outline_variant_dark</item>
-        <item name="colorInversePrimary">@color/md_inverse_primary_dark</item>
-        <item name="colorInverseSurface">@color/md_inverse_surface_dark</item>
-        <item name="colorInverseOnSurface">@color/md_inverse_on_surface_dark</item>
     </style>
 </resources>
