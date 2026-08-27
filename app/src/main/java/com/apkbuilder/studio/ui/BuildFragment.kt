@@ -52,6 +52,14 @@ class BuildFragment : Fragment() {
         setupFileList()
         setupListeners()
         observeViewModel()
+        setupAnimations()
+    }
+
+    private fun setupAnimations() {
+        ButtonAnimation.applyTo(binding.btnUploadFile)
+        ButtonAnimation.applyTo(binding.btnStartBuild)
+        ButtonAnimation.applyTo(binding.btnCancelBuild)
+        ButtonAnimation.applyTo(binding.btnClearFiles)
     }
 
     private fun setupFileList() {

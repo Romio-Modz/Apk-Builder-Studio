@@ -32,6 +32,9 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        ButtonAnimation.applyToCard(binding.cardNewBuild)
+        ButtonAnimation.applyToCard(binding.cardHistory)
+
         binding.cardNewBuild.setOnClickListener {
             findNavController().navigate(R.id.action_home_to_build)
         }
