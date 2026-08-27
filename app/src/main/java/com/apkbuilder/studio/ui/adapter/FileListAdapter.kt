@@ -7,7 +7,6 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.apkbuilder.studio.databinding.ItemFileBinding
 import com.apkbuilder.studio.ui.FileEntry
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class FileListAdapter(
     private val onRemoveClick: (FileEntry) -> Unit
@@ -36,8 +35,10 @@ class FileListAdapter(
         }
     }
 
-    companion object DiffCallback = object : DiffUtil.ItemCallback<FileEntry>() {
-        override fun areItemsTheSame(a: FileEntry, b: FileEntry) = a.path == b.path
-        override fun areContentsTheSame(a: FileEntry, b: FileEntry) = a == b
+    companion object {
+        val DiffCallback = object : DiffUtil.ItemCallback<FileEntry>() {
+            override fun areItemsTheSame(a: FileEntry, b: FileEntry) = a.path == b.path
+            override fun areContentsTheSame(a: FileEntry, b: FileEntry) = a == b
+        }
     }
 }

@@ -54,8 +54,10 @@ class JobAdapter(
         }
     }
 
-    companion object DiffCallback = object : DiffUtil.ItemCallback<BuildJob>() {
-        override fun areItemsTheSame(a: BuildJob, b: BuildJob) = a.id == b.id
-        override fun areContentsTheSame(a: BuildJob, b: BuildJob) = a == b
+    companion object {
+        val DiffCallback = object : DiffUtil.ItemCallback<BuildJob>() {
+            override fun areItemsTheSame(a: BuildJob, b: BuildJob) = a.id == b.id
+            override fun areContentsTheSame(a: BuildJob, b: BuildJob) = a == b
+        }
     }
 }
