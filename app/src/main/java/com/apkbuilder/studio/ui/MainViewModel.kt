@@ -158,13 +158,17 @@ class MainViewModel : ViewModel() {
             if (files.isNotEmpty()) {
                 addLog("Preparing ${files.size} files for upload...")
                 
-                // Read all files into memory with stripped paths
+                // Read all files - each file's path now points to an extracted temp file
                 val fileDataList = mutableListOf<FileData>()
                 for (file in files) {
                     val cleanPath = stripRootFolder(file.name)
                     val bytes = withContext(Dispatchers.IO) {
                         try {
-                            if (file.uri != null) {
+                            // Read from temp file path (extracted ZIP entry or copied file)
+                            val tempFile = java.io.File(file.path)
+                            if (tempFile.exists() && tempFile.length() > 0) {
+                                tempFile.readBytes()
+                            } else if (file.uri != null) {
                                 val inputStream = context.contentResolver.openInputStream(file.uri)
                                 if (inputStream != null) {
                                     val b = inputStream.readBytes()

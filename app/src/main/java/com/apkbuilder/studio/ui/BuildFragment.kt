@@ -19,6 +19,8 @@ import com.apkbuilder.studio.databinding.FragmentBuildBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.zip.ZipInputStream
 
@@ -41,9 +43,11 @@ class BuildFragment : Fragment() {
                 if (fileName.endsWith(".zip", ignoreCase = true)) {
                     handleZipFile(uri, fileName)
                 } else {
-                    val fileSizeKB = getFileSizeKB(uri)
-                    withContext(Dispatchers.Main) {
-                        viewModel.addFile(fileName, uri.toString(), fileSizeKB, uri)
+                    // Copy individual file to temp cache so we have a stable path
+                    val tempFile = copyToTempFile(uri, fileName)
+                    if (tempFile != null) {
+                        val fileSizeKB = tempFile.length() / 1024.0
+                        viewModel.addFile(fileName, tempFile.absolutePath, fileSizeKB, Uri.fromFile(tempFile))
                     }
                 }
             }
@@ -87,6 +91,15 @@ class BuildFragment : Fragment() {
         }
 
         binding.btnClearFiles.setOnClickListener {
+            // Clean up temp files
+            viewModel.uploadedFiles.value.forEach { file ->
+                try {
+                    val f = java.io.File(file.path)
+                    if (f.exists() && f.absolutePath.contains(requireContext().cacheDir.absolutePath)) {
+                        f.delete()
+                    }
+                } catch (e: Exception) {}
+            }
             viewModel.clearFiles()
         }
 
@@ -94,9 +107,7 @@ class BuildFragment : Fragment() {
             binding.tvBuildTypeLabel.text = if (isChecked) "Release Build" else "Debug Build"
         }
 
-        // Read GitHub field values when Start Build is pressed
         binding.btnStartBuild.setOnClickListener {
-            // Read all field values right before building
             viewModel.updateGithubToken(binding.etGithubToken.text.toString())
             viewModel.updateGithubUser(binding.etGithubUser.text.toString())
             viewModel.updateRepoName(binding.etRepoName.text.toString())
@@ -121,29 +132,50 @@ class BuildFragment : Fragment() {
         }
 
         binding.btnDownloadApk.setOnClickListener {
-            val arts = viewModel.artifacts.value
-            if (arts.isNotEmpty()) {
-                val url = arts[0].downloadUrl
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${viewModel.githubUser.value}/${viewModel.repoName.value}/actions"))
-                startActivity(intent)
-            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${viewModel.githubUser.value}/${viewModel.repoName.value}/actions"))
+            startActivity(intent)
         }
     }
 
+    /**
+     * Extract ZIP file entries to individual temp files in cache directory.
+     * Each extracted file gets its own temp file so we don't need to re-read the ZIP later.
+     */
     private suspend fun handleZipFile(zipUri: Uri, zipFileName: String) {
         withContext(Dispatchers.IO) {
             try {
+                val cacheDir = requireContext().cacheDir
+                val extractDir = File(cacheDir, "extracted_${System.currentTimeMillis()}")
+                extractDir.mkdirs()
+
                 val inputStream: InputStream? = requireContext().contentResolver.openInputStream(zipUri)
                 inputStream?.use { stream ->
                     val zipStream = ZipInputStream(stream)
                     var entry = zipStream.nextEntry
+                    var count = 0
                     while (entry != null) {
                         if (!entry.isDirectory) {
                             val entryName = entry.name
-                            val entrySizeKB = if (entry.size > 0) entry.size / 1024.0 else 1.0
-                            withContext(Dispatchers.Main) {
-                                viewModel.addFile(entryName, "$zipFileName!/$entryName", entrySizeKB, zipUri)
+                            // Sanitize file name for temp file
+                            val safeName = entryName.replace("/", "_").replace("\\", "_")
+                            val tempFile = File(extractDir, "${count}_${safeName}")
+                            
+                            // Extract entry to temp file
+                            FileOutputStream(tempFile).use { out ->
+                                val buffer = ByteArray(8192)
+                                var len: Int
+                                while (zipStream.read(buffer).also { len = it } > 0) {
+                                    out.write(buffer, 0, len)
+                                }
                             }
+                            
+                            val fileSizeKB = tempFile.length() / 1024.0
+                            val fileUri = Uri.fromFile(tempFile)
+                            
+                            withContext(Dispatchers.Main) {
+                                viewModel.addFile(entryName, tempFile.absolutePath, fileSizeKB, fileUri)
+                            }
+                            count++
                         }
                         entry = zipStream.nextEntry
                     }
@@ -151,8 +183,33 @@ class BuildFragment : Fragment() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    viewModel.addFile(zipFileName, zipUri.toString(), getFileSizeKB(zipUri), zipUri)
+                    viewModel.addFile(zipFileName, "error", 0.0, null)
                 }
+            }
+        }
+    }
+
+    /**
+     * Copy a single file URI to a temp file in cache directory.
+     */
+    private suspend fun copyToTempFile(uri: Uri, fileName: String): File? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val cacheDir = requireContext().cacheDir
+                val tempFile = File(cacheDir, "upload_${System.currentTimeMillis()}_$fileName")
+                val inputStream = requireContext().contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    inputStream.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    tempFile
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                null
             }
         }
     }
@@ -170,23 +227,6 @@ class BuildFragment : Fragment() {
             name = uri.lastPathSegment
         }
         return name
-    }
-
-    private fun getFileSizeKB(uri: Uri): Double {
-        var sizeKB = 0.0
-        val cursor = requireContext().contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
-                if (sizeIndex >= 0) {
-                    val sizeBytes = it.getLong(sizeIndex)
-                    if (sizeBytes > 0) {
-                        sizeKB = sizeBytes / 1024.0
-                    }
-                }
-            }
-        }
-        return if (sizeKB > 0) sizeKB else 1.0
     }
 
     private fun observeViewModel() {
