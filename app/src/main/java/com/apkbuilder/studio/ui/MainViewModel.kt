@@ -190,20 +190,27 @@ class MainViewModel : ViewModel() {
             }
             _buildProgress.value = 55
 
-            // Step 3: Push workflow file
-            addLog("Adding GitHub Actions workflow...")
-            val workflowContent = generateWorkflow(isRelease)
-            val workflowPushed = githubApi.pushFile(
-                githubRepo,
-                ".github/workflows/build-apk.yml",
-                workflowContent,
-                "Add build workflow"
-            )
-            if (workflowPushed) {
-                addLog("Workflow added successfully")
+            // Step 3: Push workflow file (only if not already in uploaded files)
+            val hasWorkflow = files.any { 
+                stripRootFolder(it.name).startsWith(".github/workflows/") && it.name.endsWith(".yml") 
+            }
+            if (hasWorkflow) {
+                addLog("Workflow already exists in uploaded files - skipping")
             } else {
-                addLog("Warning: Could not push workflow (token may lack 'workflow' scope)")
-                addLog("Please add the workflow file manually on GitHub")
+                addLog("Adding GitHub Actions workflow...")
+                val workflowContent = generateWorkflow(isRelease)
+                val workflowPushed = githubApi.pushFile(
+                    githubRepo,
+                    ".github/workflows/build-apk.yml",
+                    workflowContent,
+                    "Add build workflow"
+                )
+                if (workflowPushed) {
+                    addLog("Workflow added successfully")
+                } else {
+                    addLog("Warning: Could not push workflow (token may lack 'workflow' scope)")
+                    addLog("Please add the workflow file manually on GitHub")
+                }
             }
             _buildProgress.value = 65
 
