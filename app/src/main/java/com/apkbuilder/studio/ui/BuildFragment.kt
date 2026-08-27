@@ -103,6 +103,16 @@ class BuildFragment : Fragment() {
             viewModel.clearFiles()
         }
 
+        binding.btnToggleFiles.setOnClickListener {
+            if (binding.rvUploadedFiles.visibility == View.VISIBLE) {
+                binding.rvUploadedFiles.visibility = View.GONE
+                binding.btnToggleFiles.text = "View Uploaded Files"
+            } else {
+                binding.rvUploadedFiles.visibility = View.VISIBLE
+                binding.btnToggleFiles.text = "Hide Files"
+            }
+        }
+
         binding.switchRelease.setOnCheckedChangeListener { _, isChecked ->
             binding.tvBuildTypeLabel.text = if (isChecked) "Release Build" else "Debug Build"
         }
@@ -235,7 +245,19 @@ class BuildFragment : Fragment() {
                 viewModel.uploadedFiles.collect { files ->
                     fileAdapter.submitList(files)
                     binding.tvFileCount.text = "${files.size} files uploaded"
-                    binding.rvUploadedFiles.visibility = if (files.isEmpty()) View.GONE else View.VISIBLE
+                    if (files.isEmpty()) {
+                        binding.btnToggleFiles.visibility = View.GONE
+                        binding.rvUploadedFiles.visibility = View.GONE
+                        binding.btnToggleFiles.text = "View Uploaded Files"
+                    } else {
+                        binding.btnToggleFiles.visibility = View.VISIBLE
+                        // Keep RecyclerView hidden until user taps to expand
+                        if (binding.rvUploadedFiles.visibility == View.VISIBLE) {
+                            binding.btnToggleFiles.text = "Hide Files"
+                        } else {
+                            binding.btnToggleFiles.text = "View Uploaded Files"
+                        }
+                    }
                 }
             }
         }

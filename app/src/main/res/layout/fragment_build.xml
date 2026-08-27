@@ -276,6 +276,16 @@
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleFiles"
+                    style="@style/Widget.Material3.Button.TextButton.Icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:visibility="gone"
+                    android:text="View Uploaded Files"
+                    app:icon="@drawable/ic_file" />
+
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/rvUploadedFiles"
                     android:layout_width="match_parent"
