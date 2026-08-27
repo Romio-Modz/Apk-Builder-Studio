@@ -29,4 +29,10 @@
         android:name="com.apkbuilder.studio.ui.HistoryFragment"
         android:label="@string/nav_history"
         tools:layout="@layout/fragment_history" />
+
+    <fragment
+        android:id="@+id/navigation_settings"
+        android:name="com.apkbuilder.studio.ui.SettingsFragment"
+        android:label="@string/nav_settings"
+        tools:layout="@layout/fragment_settings" />
 </navigation>

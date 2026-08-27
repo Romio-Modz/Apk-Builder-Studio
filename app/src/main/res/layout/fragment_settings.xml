@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_md">
+
+        <!-- Theme Mode Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            android:text="Appearance"
+            android:textAppearance="@style/TextAppearance.APKBuilder.Title" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.APKBuilder.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    android:text="Theme Mode"
+                    android:textAppearance="?attr/textAppearanceLabelLarge" />
+
+                <RadioGroup
+                    android:id="@+id/themeModeGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/rbDefault"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Default" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/rbLight"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Light" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/rbNight"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Night" />
+                </RadioGroup>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Telegram Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            android:text="Community"
+            android:textAppearance="@style/TextAppearance.APKBuilder.Title" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTelegram"
+            style="@style/Widget.APKBuilder.Button.Icon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            android:backgroundTint="#229ED9"
+            android:text="Join Our Telegram Channel"
+            android:textColor="@android:color/white"
+            app:icon="@drawable/ic_telegram"
+            app:iconTint="@android:color/white"
+            app:iconGravity="textStart" />
+
+        <!-- About Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/aboutCard"
+            style="@style/Widget.APKBuilder.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            android:clickable="true"
+            android:focusable="true"
+            app:rippleColor="?attr/colorPrimary">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:src="@drawable/ic_app_logo"
+                        app:tint="?attr/colorPrimary"
+                        android:contentDescription="About" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/spacing_sm"
+                        android:text="About APK Builder Studio"
+                        android:textAppearance="@style/TextAppearance.APKBuilder.Title" />
+
+                    <ImageView
+                        android:id="@+id/aboutArrow"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_arrow_right"
+                        app:tint="?attr/colorOnSurfaceVariant"
+                        android:contentDescription="Expand" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/aboutContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="APK Builder Studio v2.0\n\nIs app aapke mobile se seedha Android APK banane ke liye hai. Apna source code ya ZIP file upload karo, GitHub se connect karo, aur build karo.\n\nThis app lets you build Android APKs directly from your phone. Upload your source code or ZIP file, connect to GitHub, and trigger real APK builds through GitHub Actions.\n\nFeatures:\n- Material Design 3 UI\n- Light / Dark / Default Mode\n- GitHub Actions Integration\n- ZIP File Support\n- Build History\n\nDeveloped By: The Romio Shaikh\nGitHub: @Romio-Modz"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:lineSpacingExtra="4dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Footer: Developed By -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/footerTelegram"
+            style="@style/Widget.APKBuilder.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardBackgroundColor="?attr/colorPrimaryContainer"
+            app:rippleColor="?attr/colorPrimary">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="@dimen/spacing_md">
+
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_telegram"
+                    app:tint="?attr/colorOnPrimaryContainer"
+                    android:contentDescription="Telegram" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Developed By The Romio Shaikh"
+                    android:textAppearance="@style/TextAppearance.APKBuilder.Title"
+                    android:textColor="?attr/colorOnPrimaryContainer" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Tap to join Telegram"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnPrimaryContainer"
+                    android:alpha="0.7" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Watermark -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="@dimen/spacing_sm"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:text="The Romio Shaikh"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:alpha="0.6" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

@@ -444,4 +444,15 @@
         </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="The Romio Shaikh"
+        android:textAppearance="?attr/textAppearanceLabelSmall"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:alpha="0.6" />
+
 </androidx.core.widget.NestedScrollView>

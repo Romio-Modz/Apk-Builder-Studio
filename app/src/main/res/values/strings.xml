@@ -4,6 +4,7 @@
     <string name="nav_home">Home</string>
     <string name="nav_build">Build</string>
     <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
 
     <!-- Home -->
     <string name="welcome_title">APK Builder Studio</string>
