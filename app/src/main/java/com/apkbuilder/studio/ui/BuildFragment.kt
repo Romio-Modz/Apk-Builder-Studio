@@ -10,7 +10,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.apkbuilder.studio.adapter.FileListAdapter
+import com.apkbuilder.studio.ui.adapter.FileListAdapter
 import com.apkbuilder.studio.databinding.FragmentBuildBinding
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
