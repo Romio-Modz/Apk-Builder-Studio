@@ -1,6 +1,5 @@
 package com.apkbuilder.studio.ui
 
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -16,7 +15,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.apkbuilder.studio.ui.adapter.FileListAdapter
 import com.apkbuilder.studio.databinding.FragmentBuildBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.InputStream
+import java.util.zip.ZipInputStream
 
 class BuildFragment : Fragment() {
 
@@ -30,10 +33,19 @@ class BuildFragment : Fragment() {
     ) { uris ->
         if (uris.isNullOrEmpty()) return@registerForActivityResult
 
-        for (uri in uris) {
-            val fileName = getFileName(uri) ?: "unknown_file"
-            val fileSizeKB = getFileSizeKB(uri)
-            viewModel.addFile(fileName, uri.toString(), fileSizeKB)
+        viewLifecycleOwner.lifecycleScope.launch {
+            for (uri in uris) {
+                val fileName = getFileName(uri) ?: "unknown_file"
+
+                if (fileName.endsWith(".zip", ignoreCase = true)) {
+                    handleZipFile(uri, fileName)
+                } else {
+                    val fileSizeKB = getFileSizeKB(uri)
+                    withContext(Dispatchers.Main) {
+                        viewModel.addFile(fileName, uri.toString(), fileSizeKB)
+                    }
+                }
+            }
         }
     }
 
@@ -90,6 +102,33 @@ class BuildFragment : Fragment() {
         binding.btnCancelBuild.setOnClickListener {
             viewModel.cancelBuild()
             binding.buildProgressCard.visibility = View.GONE
+        }
+    }
+
+    private suspend fun handleZipFile(zipUri: Uri, zipFileName: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val inputStream: InputStream? = requireContext().contentResolver.openInputStream(zipUri)
+                inputStream?.use { stream ->
+                    val zipStream = ZipInputStream(stream)
+                    var entry = zipStream.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory) {
+                            val entryName = entry.name
+                            val entrySizeKB = if (entry.size > 0) entry.size / 1024.0 else 1.0
+                            withContext(Dispatchers.Main) {
+                                viewModel.addFile(entryName, "$zipFileName!/$entryName", entrySizeKB)
+                            }
+                        }
+                        entry = zipStream.nextEntry
+                    }
+                    zipStream.closeEntry()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    viewModel.addFile(zipFileName, zipUri.toString(), getFileSizeKB(zipUri))
+                }
+            }
         }
     }
 
