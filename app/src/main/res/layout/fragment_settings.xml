@@ -194,17 +194,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Watermark -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:padding="@dimen/spacing_sm"
-            android:layout_marginTop="@dimen/spacing_sm"
-            android:text="The Romio Shaikh"
-            android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:alpha="0.6" />
-
     </LinearLayout>
+
 </androidx.core.widget.NestedScrollView>
