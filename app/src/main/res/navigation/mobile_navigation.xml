@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/navigation_home">
+
+    <fragment
+        android:id="@+id/navigation_home"
+        android:name="com.apkbuilder.studio.ui.HomeFragment"
+        android:label="@string/nav_home"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_home_to_build"
+            app:destination="@id/navigation_build" />
+        <action
+            android:id="@+id/action_home_to_history"
+            app:destination="@id/navigation_history" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_build"
+        android:name="com.apkbuilder.studio.ui.BuildFragment"
+        android:label="@string/nav_build"
+        tools:layout="@layout/fragment_build" />
+
+    <fragment
+        android:id="@+id/navigation_history"
+        android:name="com.apkbuilder.studio.ui.HistoryFragment"
+        android:label="@string/nav_history"
+        tools:layout="@layout/fragment_history" />
+</navigation>
