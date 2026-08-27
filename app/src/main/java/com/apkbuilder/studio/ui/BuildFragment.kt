@@ -1,5 +1,6 @@
 package com.apkbuilder.studio.ui
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -42,7 +43,7 @@ class BuildFragment : Fragment() {
                 } else {
                     val fileSizeKB = getFileSizeKB(uri)
                     withContext(Dispatchers.Main) {
-                        viewModel.addFile(fileName, uri.toString(), fileSizeKB)
+                        viewModel.addFile(fileName, uri.toString(), fileSizeKB, uri)
                     }
                 }
             }
@@ -95,13 +96,21 @@ class BuildFragment : Fragment() {
 
         binding.btnStartBuild.setOnClickListener {
             val isRelease = binding.switchRelease.isChecked
-            viewModel.startBuild(isRelease)
             binding.buildProgressCard.visibility = View.VISIBLE
+            viewModel.startRealBuild(requireContext(), isRelease)
         }
 
         binding.btnCancelBuild.setOnClickListener {
             viewModel.cancelBuild()
-            binding.buildProgressCard.visibility = View.GONE
+        }
+
+        binding.btnDownloadApk.setOnClickListener {
+            val arts = viewModel.artifacts.value
+            if (arts.isNotEmpty()) {
+                val url = arts[0].downloadUrl
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${viewModel.githubUser.value}/${viewModel.repoName.value}/actions"))
+                startActivity(intent)
+            }
         }
     }
 
@@ -117,7 +126,7 @@ class BuildFragment : Fragment() {
                             val entryName = entry.name
                             val entrySizeKB = if (entry.size > 0) entry.size / 1024.0 else 1.0
                             withContext(Dispatchers.Main) {
-                                viewModel.addFile(entryName, "$zipFileName!/$entryName", entrySizeKB)
+                                viewModel.addFile(entryName, "$zipFileName!/$entryName", entrySizeKB, zipUri)
                             }
                         }
                         entry = zipStream.nextEntry
@@ -126,7 +135,7 @@ class BuildFragment : Fragment() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    viewModel.addFile(zipFileName, zipUri.toString(), getFileSizeKB(zipUri))
+                    viewModel.addFile(zipFileName, zipUri.toString(), getFileSizeKB(zipUri), zipUri)
                 }
             }
         }
@@ -177,12 +186,17 @@ class BuildFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.currentJob.collect { job ->
-                    if (job != null) {
-                        binding.progressBar.progress = job.progress
-                        binding.tvProgressPercent.text = "${job.progress}%"
-                        binding.tvBuildStatus.text = job.status.displayName
-                    }
+                viewModel.buildProgress.collect { progress ->
+                    binding.progressBar.progress = progress
+                    binding.tvProgressPercent.text = "$progress%"
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.buildStatus.collect { status ->
+                    binding.tvBuildStatus.text = status
                 }
             }
         }
@@ -201,6 +215,19 @@ class BuildFragment : Fragment() {
                     binding.btnStartBuild.isEnabled = !building
                     binding.btnCancelBuild.isEnabled = building
                     binding.btnStartBuild.text = if (building) "Building..." else "Start Build"
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.artifacts.collect { arts ->
+                    if (arts.isNotEmpty()) {
+                        binding.btnDownloadApk.visibility = View.VISIBLE
+                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                    } else {
+                        binding.btnDownloadApk.visibility = View.GONE
+                    }
                 }
             }
         }

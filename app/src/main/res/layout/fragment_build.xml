@@ -12,12 +12,12 @@
         android:orientation="vertical"
         android:padding="@dimen/spacing_md">
 
-        <!-- Section: Repository -->
+        <!-- Section: GitHub Connection -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/spacing_sm"
-            android:text="Repository"
+            android:text="GitHub Connection"
             android:textAppearance="@style/TextAppearance.APKBuilder.Title" />
 
         <com.google.android.material.card.MaterialCardView
@@ -33,19 +33,49 @@
                 android:padding="@dimen/spacing_md">
 
                 <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/tilRepoUrl"
+                    android:id="@+id/tilGithubToken"
                     style="@style/Widget.APKBuilder.TextInputLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="@string/repo_url"
+                    android:hint="GitHub Token (ghp_...)"
+                    app:startIconDrawable="@drawable/ic_repo"
+                    app:passwordToggleEnabled="true">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etGithubToken"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.APKBuilder.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:hint="GitHub Username"
                     app:startIconDrawable="@drawable/ic_repo">
 
                     <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etRepoUrl"
+                        android:id="@+id/etGithubUser"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textUri"
-                        android:autofillHints="url" />
+                        android:inputType="text" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.APKBuilder.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:hint="Repository Name (new or existing)"
+                    app:startIconDrawable="@drawable/ic_repo">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etRepoName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -399,6 +429,16 @@
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:textIsSelectable="true" />
                 </androidx.core.widget.NestedScrollView>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDownloadApk"
+                    style="@style/Widget.APKBuilder.Button.Icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="Download APK"
+                    app:icon="@drawable/ic_build"
+                    android:visibility="gone" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
