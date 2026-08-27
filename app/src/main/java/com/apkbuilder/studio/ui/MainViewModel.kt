@@ -108,6 +108,16 @@ class MainViewModel : ViewModel() {
         _logLines.value = _logLines.value + line
     }
 
+    private fun stripRootFolder(path: String): String {
+        // If path has a top-level folder like "ROMITUBE/app/build.gradle.kts",
+        // strip the first folder to get "app/build.gradle.kts"
+        val parts = path.split("/")
+        if (parts.size > 1) {
+            return parts.drop(1).joinToString("/")
+        }
+        return path
+    }
+
     fun startRealBuild(context: Context, isRelease: Boolean) {
         if (_isBuilding.value) return
 
@@ -148,6 +158,8 @@ class MainViewModel : ViewModel() {
                 addLog("Uploading ${files.size} files...")
                 var uploaded = 0
                 for (file in files) {
+                    // Strip top-level folder prefix (e.g., "ROMITUBE/" from "ROMITUBE/app/build.gradle.kts")
+                    val cleanPath = stripRootFolder(file.name)
                     val success = withContext(Dispatchers.IO) {
                         try {
                             if (file.uri != null) {
@@ -155,7 +167,7 @@ class MainViewModel : ViewModel() {
                                 if (inputStream != null) {
                                     val bytes = inputStream.readBytes()
                                     inputStream.close()
-                                    githubApi.pushBinaryFile(githubRepo, file.name, bytes)
+                                    githubApi.pushBinaryFile(githubRepo, cleanPath, bytes)
                                 } else {
                                     false
                                 }
