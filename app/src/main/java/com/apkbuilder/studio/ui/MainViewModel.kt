@@ -9,6 +9,7 @@ import com.apkbuilder.studio.data.BuildConfig
 import com.apkbuilder.studio.data.BuildJob
 import com.apkbuilder.studio.data.BuildRepository
 import com.apkbuilder.studio.data.BuildStatus
+import com.apkbuilder.studio.data.FileData
 import com.apkbuilder.studio.data.GitHubApiService
 import com.apkbuilder.studio.data.GitHubRepo
 import kotlinx.coroutines.Dispatchers
@@ -152,41 +153,47 @@ class MainViewModel : ViewModel() {
             }
             _buildProgress.value = 10
 
-            // Step 2: Push uploaded files
+            // Step 2: Push uploaded files using Git Data API (handles large files up to 100MB)
             val files = _uploadedFiles.value
             if (files.isNotEmpty()) {
-                addLog("Uploading ${files.size} files...")
-                var uploaded = 0
+                addLog("Preparing ${files.size} files for upload...")
+                
+                // Read all files into memory with stripped paths
+                val fileDataList = mutableListOf<FileData>()
                 for (file in files) {
-                    // Strip top-level folder prefix (e.g., "ROMITUBE/" from "ROMITUBE/app/build.gradle.kts")
                     val cleanPath = stripRootFolder(file.name)
-                    val success = withContext(Dispatchers.IO) {
+                    val bytes = withContext(Dispatchers.IO) {
                         try {
                             if (file.uri != null) {
                                 val inputStream = context.contentResolver.openInputStream(file.uri)
                                 if (inputStream != null) {
-                                    val bytes = inputStream.readBytes()
+                                    val b = inputStream.readBytes()
                                     inputStream.close()
-                                    githubApi.pushBinaryFile(githubRepo, cleanPath, bytes)
-                                } else {
-                                    false
-                                }
-                            } else {
-                                false
-                            }
-                        } catch (e: Exception) {
-                            false
-                        }
+                                    b
+                                } else null
+                            } else null
+                        } catch (e: Exception) { null }
                     }
-                    if (success) {
-                        uploaded++
-                        addLog("  Uploaded: ${file.name}")
+                    if (bytes != null) {
+                        fileDataList.add(FileData(cleanPath, bytes, true))
                     } else {
-                        addLog("  Skipped: ${file.name}")
+                        addLog("  Skipped (could not read): ${file.name}")
                     }
-                    _buildProgress.value = 10 + (uploaded * 40 / files.size)
+                    _buildProgress.value = 10 + (fileDataList.size * 20 / files.size)
                 }
-                addLog("Uploaded $uploaded/${files.size} files")
+
+                if (fileDataList.isNotEmpty()) {
+                    addLog("Uploading ${fileDataList.size} files to GitHub...")
+                    val pushSuccess = githubApi.pushAllFiles(githubRepo, fileDataList) { current, total, msg ->
+                        addLog("  [$current/$total] $msg")
+                        _buildProgress.value = 30 + (current * 25 / total)
+                    }
+                    if (pushSuccess) {
+                        addLog("All ${fileDataList.size} files uploaded successfully!")
+                    } else {
+                        addLog("Warning: Some files may not have uploaded correctly")
+                    }
+                }
             }
             _buildProgress.value = 55
 
@@ -199,11 +206,10 @@ class MainViewModel : ViewModel() {
             } else {
                 addLog("Adding GitHub Actions workflow...")
                 val workflowContent = generateWorkflow(isRelease)
-                val workflowPushed = githubApi.pushFile(
+                val workflowPushed = githubApi.pushSingleFile(
                     githubRepo,
                     ".github/workflows/build-apk.yml",
-                    workflowContent,
-                    "Add build workflow"
+                    workflowContent
                 )
                 if (workflowPushed) {
                     addLog("Workflow added successfully")
