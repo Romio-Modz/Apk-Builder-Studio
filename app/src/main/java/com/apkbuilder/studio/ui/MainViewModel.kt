@@ -296,6 +296,9 @@ class MainViewModel : ViewModel() {
     }
 
     private fun generateWorkflow(isRelease: Boolean): String {
+        val buildTask = if (isRelease) "assembleRelease" else "assembleDebug"
+        val apkPath = if (isRelease) "app/build/outputs/apk/release/*.apk" else "app/build/outputs/apk/debug/*.apk"
+        val artifactName = if (isRelease) "apk-release" else "apk-debug"
         return """name: Build APK
 
 on:
@@ -320,18 +323,47 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew || true
 
-      - name: Upload Debug APK
+      - name: Build APK
+        run: |
+          if [ -f ./gradlew ]; then
+            ./gradlew $buildTask --no-daemon --stacktrace 2>&1 | tee build_log.txt
+          else
+            gradle $buildTask --no-daemon --stacktrace 2>&1 | tee build_log.txt
+          fi
+
+      - name: Upload Build Log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: apk-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: build-log
+          path: build_log.txt
+          retention-days: 7
+
+      - name: Find all APK files
+        if: always()
+        id: find_apks
+        run: |
+          echo "Searching for APK files..."
+          find . -name "*.apk" -type f | head -20
+          APK_COUNT=$(find . -name "*.apk" -type f | wc -l)
+          echo "Found $APK_COUNT APK files"
+          echo "apk_count=$APK_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Upload Debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: $artifactName
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+            **/build/outputs/apk/**/*.apk
           retention-days: 30
+          if-no-files-found: ignore
 """
     }
 
