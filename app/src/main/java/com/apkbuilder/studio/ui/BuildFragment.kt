@@ -181,10 +181,18 @@ class BuildFragment : Fragment() {
 
             val isRelease = binding.switchRelease.isChecked
             binding.buildProgressCard.visibility = View.VISIBLE
-            // Scroll the main page UP to show build progress card
-            binding.scrollView.post {
-                binding.scrollView.fullScroll(View.FOCUS_UP)
-            }
+            // Scroll directly to the build progress card (not top of page)
+            binding.scrollView.postDelayed({
+                val cardTop = binding.buildProgressCard.top
+                val parent = binding.buildProgressCard.parent as android.view.ViewGroup
+                var offset = 0
+                var v: View = binding.buildProgressCard
+                while (v !== binding.scrollView) {
+                    offset += v.top
+                    v = v.parent as View
+                }
+                binding.scrollView.smoothScrollTo(0, offset)
+            }, 200)
             viewModel.startRealBuild(requireContext(), isRelease)
         }
 
@@ -426,9 +434,10 @@ class BuildFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.logLines.collect { lines ->
                     binding.tvBuildLog.text = lines.joinToString("\n")
-                    // Auto-scroll DOWN so the latest log line is always visible
+                    // Auto-scroll inner log to bottom WITHOUT requesting focus
+                    // (fullScroll causes focus change which makes outer page jump)
                     binding.scrollBuildLog.postDelayed({
-                        binding.scrollBuildLog.fullScroll(View.FOCUS_DOWN)
+                        binding.scrollBuildLog.scrollTo(0, binding.tvBuildLog.height)
                     }, 100)
                 }
             }
