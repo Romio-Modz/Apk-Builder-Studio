@@ -11,8 +11,8 @@ android {
         applicationId = "com.apkbuilder.studio"
         minSdk = 24
         targetSdk = 34
-        versionCode = 12
-        versionName = "2.7.0"
+        versionCode = 13
+        versionName = "2.7.1"
     }
 
     buildTypes {

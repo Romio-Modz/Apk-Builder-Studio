@@ -277,6 +277,49 @@ class MainViewModel : ViewModel() {
                                     addLog("  - ${art.name} (${art.sizeKB} KB)")
                                 }
                             }
+                        } else if (conclusion == "cancelled") {
+                            // The workflow_dispatch run was cancelled (likely because push triggered a duplicate)
+                            // Check the latest run of any type - it might be the push-triggered run that's actually building
+                            addLog("Run was cancelled, checking for push-triggered run...")
+                            val altRunId = githubApi.getLatestRunId(githubRepo)
+                            if (altRunId != null && altRunId != runId) {
+                                addLog("Found alternative run: $altRunId")
+                                // Poll the alternative run
+                                var altPollCount = 0
+                                while (altPollCount < 40) {
+                                    kotlinx.coroutines.delay(15000)
+                                    altPollCount++
+                                    val altStatus = githubApi.getRunStatus(githubRepo, altRunId)
+                                    if (altStatus != null) {
+                                        val (altS, altC) = altStatus
+                                        val altProgress = 70 + (altPollCount * 25 / 40)
+                                        _buildProgress.value = minOf(altProgress, 95)
+                                        addLog("  Build status: $altS" + if (altC != "null") " ($altC)" else "")
+                                        if (altS == "completed") {
+                                            if (altC == "success") {
+                                                _buildProgress.value = 100
+                                                _buildStatus.value = "Success"
+                                                addLog("Build completed successfully!")
+                                                val arts = githubApi.getArtifacts(githubRepo, altRunId)
+                                                if (arts != null && arts.isNotEmpty()) {
+                                                    _artifacts.value = arts
+                                                    addLog("APK artifacts ready for download!")
+                                                    for (art in arts) {
+                                                        addLog("  - ${art.name} (${art.sizeKB} KB)")
+                                                    }
+                                                }
+                                            } else {
+                                                _buildStatus.value = "Failed"
+                                                addLog("Build failed on GitHub. Check Actions tab for details.")
+                                            }
+                                            break
+                                        }
+                                    }
+                                }
+                            } else {
+                                _buildStatus.value = "Failed"
+                                addLog("Build was cancelled. Check Actions tab on GitHub.")
+                            }
                         } else {
                             _buildStatus.value = "Failed"
                             addLog("Build failed on GitHub. Check Actions tab for details.")

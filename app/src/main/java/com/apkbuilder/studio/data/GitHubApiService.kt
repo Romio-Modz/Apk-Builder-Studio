@@ -499,7 +499,7 @@ class GitHubApiService {
         }
     }
 
-    private fun getLatestRunId(repo: GitHubRepo): String? {
+    fun getLatestRunId(repo: GitHubRepo): String? {
         try {
             val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/actions/runs?per_page=1")
             val conn = url.openConnection() as HttpURLConnection
