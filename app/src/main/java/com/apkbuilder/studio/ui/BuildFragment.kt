@@ -144,7 +144,10 @@ class BuildFragment : Fragment() {
 
         binding.btnDownloadApk.setOnClickListener {
             val arts = viewModel.artifacts.value
-            if (arts.isNotEmpty()) {
+            // Filter out non-APK artifacts (like build-log) - prefer apk-debug, then apk-release, then any with apk in name
+            val apkArtifact = arts.firstOrNull { it.name.contains("apk", ignoreCase = true) && !it.name.contains("log", ignoreCase = true) }
+                ?: arts.firstOrNull { !it.name.contains("log", ignoreCase = true) }
+            if (apkArtifact != null) {
                 binding.btnDownloadApk.text = "Downloading..."
                 binding.btnDownloadApk.isEnabled = false
                 viewLifecycleOwner.lifecycleScope.launch {
@@ -152,7 +155,7 @@ class BuildFragment : Fragment() {
                     val user = viewModel.githubUser.value
                     val repoName = viewModel.repoName.value
                     if (token.isEmpty() || user.isEmpty() || repoName.isEmpty()) {
-                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                         binding.btnDownloadApk.isEnabled = true
                         return@launch
                     }
@@ -160,9 +163,9 @@ class BuildFragment : Fragment() {
                     // Save to app's files directory (no special permission needed on Android 10+)
                     val outputDir = File(requireContext().getExternalFilesDir(null), "downloads")
                     outputDir.mkdirs()
-                    val apkFile = viewModel.githubApi.downloadApkArtifact(githubRepo, arts[0], outputDir)
+                    val apkFile = viewModel.githubApi.downloadApkArtifact(githubRepo, apkArtifact, outputDir)
                     if (apkFile != null && apkFile.exists()) {
-                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                         binding.btnDownloadApk.isEnabled = true
                         // Open install prompt
                         val intent = Intent(Intent.ACTION_VIEW)
@@ -170,7 +173,7 @@ class BuildFragment : Fragment() {
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         startActivity(intent)
                     } else {
-                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                         binding.btnDownloadApk.isEnabled = true
                         // Fallback: open GitHub Actions page in browser
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/$user/$repoName/actions"))
@@ -334,9 +337,12 @@ class BuildFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.artifacts.collect { arts: List<com.apkbuilder.studio.data.ArtifactInfo> ->
-                    if (arts.isNotEmpty()) {
+                    // Filter out build-log artifacts, only show download button if APK artifact exists
+                    val apkArtifact = arts.firstOrNull { it.name.contains("apk", ignoreCase = true) && !it.name.contains("log", ignoreCase = true) }
+                        ?: arts.firstOrNull { !it.name.contains("log", ignoreCase = true) }
+                    if (apkArtifact != null) {
                         binding.btnDownloadApk.visibility = View.VISIBLE
-                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                     } else {
                         binding.btnDownloadApk.visibility = View.GONE
                     }
