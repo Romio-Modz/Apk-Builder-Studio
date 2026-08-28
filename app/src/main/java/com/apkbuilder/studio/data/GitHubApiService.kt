@@ -33,6 +33,36 @@ data class FileData(
 
 class GitHubApiService {
 
+    /**
+     * Fetches the user's repository list from GitHub.
+     * Returns a list of repo names, or null on failure.
+     */
+    suspend fun getRepoList(token: String): List<String>? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("https://api.github.com/user/repos?per_page=100&sort=updated")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Authorization", "token $token")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+
+            val response = readResponse(conn)
+            conn.disconnect()
+
+            if (conn.responseCode !in 200..299) return@withContext null
+
+            val jsonArray = JSONArray(response)
+            val result = mutableListOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                val repo = jsonArray.getJSONObject(i)
+                result.add(repo.getString("name"))
+            }
+            result
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun createRepo(repo: GitHubRepo): Boolean = withContext(Dispatchers.IO) {
         try {
             val url = URL("https://api.github.com/user/repos")

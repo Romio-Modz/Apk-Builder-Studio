@@ -78,6 +78,15 @@
                         android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBrowseRepos"
+                    style="@style/Widget.Material3.Button.TextButton.Icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Browse My Repositories"
+                    app:icon="@drawable/ic_repo" />
+
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.APKBuilder.TextInputLayout"
                     android:layout_width="match_parent"

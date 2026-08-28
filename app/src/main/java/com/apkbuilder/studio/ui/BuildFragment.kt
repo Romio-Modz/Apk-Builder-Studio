@@ -67,6 +67,14 @@ class BuildFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Auto-fill saved token and username
+        val savedToken = com.apkbuilder.studio.data.PreferencesHelper.getGithubToken(requireContext())
+        val savedUser = com.apkbuilder.studio.data.PreferencesHelper.getGithubUser(requireContext())
+        val savedRepo = com.apkbuilder.studio.data.PreferencesHelper.getRepoName(requireContext())
+        if (savedToken.isNotEmpty()) binding.etGithubToken.setText(savedToken)
+        if (savedUser.isNotEmpty()) binding.etGithubUser.setText(savedUser)
+        if (savedRepo.isNotEmpty()) binding.etRepoName.setText(savedRepo)
+
         setupFileList()
         setupListeners()
         observeViewModel()
@@ -89,6 +97,38 @@ class BuildFragment : Fragment() {
     private fun setupListeners() {
         binding.btnUploadFile.setOnClickListener {
             pickMultipleFiles.launch(arrayOf("*/*"))
+        }
+
+        binding.btnBrowseRepos.setOnClickListener {
+            val token = binding.etGithubToken.text.toString().trim()
+            if (token.isEmpty()) {
+                android.widget.Toast.makeText(requireContext(), "Please enter GitHub Token first", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            binding.btnBrowseRepos.text = "Loading..."
+            binding.btnBrowseRepos.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                val repos = viewModel.githubApi.getRepoList(token)
+                binding.btnBrowseRepos.text = "Browse My Repositories"
+                binding.btnBrowseRepos.isEnabled = true
+                if (repos == null) {
+                    android.widget.Toast.makeText(requireContext(), "Failed to load repos. Check token.", android.widget.Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                if (repos.isEmpty()) {
+                    android.widget.Toast.makeText(requireContext(), "No repositories found", android.widget.Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                // Show repo selection dialog
+                val builder = android.app.AlertDialog.Builder(requireContext())
+                builder.setTitle("Select Repository")
+                builder.setItems(repos.toTypedArray()) { _, which ->
+                    binding.etRepoName.setText(repos[which])
+                    com.apkbuilder.studio.data.PreferencesHelper.saveRepoName(requireContext(), repos[which])
+                }
+                builder.setNegativeButton("Cancel", null)
+                builder.show()
+            }
         }
 
         binding.btnClearFiles.setOnClickListener {
@@ -122,6 +162,12 @@ class BuildFragment : Fragment() {
             viewModel.updateGithubToken(binding.etGithubToken.text.toString())
             viewModel.updateGithubUser(binding.etGithubUser.text.toString())
             viewModel.updateRepoName(binding.etRepoName.text.toString())
+
+            // Save token, username, repo for next time
+            com.apkbuilder.studio.data.PreferencesHelper.saveGithubToken(requireContext(), binding.etGithubToken.text.toString())
+            com.apkbuilder.studio.data.PreferencesHelper.saveGithubUser(requireContext(), binding.etGithubUser.text.toString())
+            com.apkbuilder.studio.data.PreferencesHelper.saveRepoName(requireContext(), binding.etRepoName.text.toString())
+
             viewModel.updateBranch(binding.etBranch.text.toString())
             viewModel.updateAppName(binding.etAppName.text.toString())
             viewModel.updatePackageName(binding.etPackageName.text.toString())
