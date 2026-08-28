@@ -6,9 +6,12 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipInputStream
 
 data class GitHubRepo(
     val owner: String,
@@ -397,6 +400,57 @@ class GitHubApiService {
                 ))
             }
             result
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Downloads an artifact ZIP from GitHub API, extracts the APK file from it,
+     * and saves it to the outputDir. Returns the saved APK file, or null on failure.
+     */
+    suspend fun downloadApkArtifact(repo: GitHubRepo, artifact: ArtifactInfo, outputDir: File): File? = withContext(Dispatchers.IO) {
+        try {
+            // GitHub artifact download URL returns a ZIP file containing the artifact
+            val url = URL(artifact.downloadUrl)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Authorization", "token ${repo.token}")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 30000
+            conn.readTimeout = 120000
+
+            if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                return@withContext null
+            }
+
+            // Read the ZIP input stream and extract .apk files from it
+            val zipStream = ZipInputStream(conn.inputStream)
+            var apkFile: File? = null
+            var entry = zipStream.nextEntry
+            while (entry != null) {
+                if (entry.name.endsWith(".apk")) {
+                    val apkName = File(entry.name).name
+                    val outFile = File(outputDir, apkName)
+                    FileOutputStream(outFile).use { fos ->
+                        val buffer = ByteArray(8192)
+                        var len: Int
+                        while (zipStream.read(buffer).also { len = it } > 0) {
+                            fos.write(buffer, 0, len)
+                        }
+                    }
+                    apkFile = outFile
+                    break
+                }
+                zipStream.closeEntry()
+                entry = zipStream.nextEntry
+            }
+            zipStream.close()
+            conn.disconnect()
+            apkFile
         } catch (e: Exception) {
             null
         }

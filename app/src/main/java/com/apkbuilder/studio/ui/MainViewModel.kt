@@ -29,7 +29,7 @@ data class FileEntry(
 class MainViewModel : ViewModel() {
 
     private val repository = BuildRepository.getInstance()
-    private val githubApi = GitHubApiService()
+    val githubApi = GitHubApiService()
 
     val jobs: StateFlow<List<BuildJob>> = repository.jobs
     val currentJob: StateFlow<BuildJob?> = repository.currentJob

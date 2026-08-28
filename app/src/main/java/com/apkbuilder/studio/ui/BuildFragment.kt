@@ -3,6 +3,7 @@ package com.apkbuilder.studio.ui
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.OpenableColumns
 import android.view.LayoutInflater
 import android.view.View
@@ -142,8 +143,41 @@ class BuildFragment : Fragment() {
         }
 
         binding.btnDownloadApk.setOnClickListener {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${viewModel.githubUser.value}/${viewModel.repoName.value}/actions"))
-            startActivity(intent)
+            val arts = viewModel.artifacts.value
+            if (arts.isNotEmpty()) {
+                binding.btnDownloadApk.text = "Downloading..."
+                binding.btnDownloadApk.isEnabled = false
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val token = viewModel.githubToken.value
+                    val user = viewModel.githubUser.value
+                    val repoName = viewModel.repoName.value
+                    if (token.isEmpty() || user.isEmpty() || repoName.isEmpty()) {
+                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.isEnabled = true
+                        return@launch
+                    }
+                    val githubRepo = com.apkbuilder.studio.data.GitHubRepo(user, repoName, token)
+                    // Save to app's files directory (no special permission needed on Android 10+)
+                    val outputDir = File(requireContext().getExternalFilesDir(null), "downloads")
+                    outputDir.mkdirs()
+                    val apkFile = viewModel.githubApi.downloadApkArtifact(githubRepo, arts[0], outputDir)
+                    if (apkFile != null && apkFile.exists()) {
+                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.isEnabled = true
+                        // Open install prompt
+                        val intent = Intent(Intent.ACTION_VIEW)
+                        intent.setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        startActivity(intent)
+                    } else {
+                        binding.btnDownloadApk.text = "Download APK (${arts[0].name})"
+                        binding.btnDownloadApk.isEnabled = true
+                        // Fallback: open GitHub Actions page in browser
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/$user/$repoName/actions"))
+                        startActivity(intent)
+                    }
+                }
+            }
         }
     }
 
