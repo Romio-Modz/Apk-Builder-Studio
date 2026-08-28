@@ -426,10 +426,10 @@ class BuildFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.logLines.collect { lines ->
                     binding.tvBuildLog.text = lines.joinToString("\n")
-                    // Keep scroll at TOP so build progress and status are always visible
-                    binding.scrollBuildLog.post {
-                        binding.scrollBuildLog.fullScroll(View.FOCUS_UP)
-                    }
+                    // Auto-scroll DOWN so the latest log line is always visible
+                    binding.scrollBuildLog.postDelayed({
+                        binding.scrollBuildLog.fullScroll(View.FOCUS_DOWN)
+                    }, 100)
                 }
             }
         }
