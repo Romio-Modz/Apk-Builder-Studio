@@ -236,7 +236,7 @@ class MainViewModel : ViewModel() {
 
             // Step 4: Trigger workflow
             addLog("Triggering build on GitHub Actions...")
-            val runId = githubApi.triggerWorkflow(githubRepo)
+            val runId = githubApi.triggerWorkflow(githubRepo, isRelease)
             if (runId != null) {
                 addLog("Build triggered! Run ID: $runId")
             } else {

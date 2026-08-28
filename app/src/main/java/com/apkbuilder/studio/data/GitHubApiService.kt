@@ -363,7 +363,7 @@ class GitHubApiService {
         return false
     }
 
-    suspend fun triggerWorkflow(repo: GitHubRepo): String? = withContext(Dispatchers.IO) {
+    suspend fun triggerWorkflow(repo: GitHubRepo, isRelease: Boolean = false): String? = withContext(Dispatchers.IO) {
         try {
             val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/actions/workflows")
             val conn = url.openConnection() as HttpURLConnection
@@ -379,7 +379,28 @@ class GitHubApiService {
             val workflows = json.getJSONArray("workflows")
             if (workflows.length() == 0) return@withContext null
 
-            val workflowId = workflows.getJSONObject(0).getLong("id")
+            // Find the right workflow - prefer release workflow if release build
+            var workflowId: Long? = null
+            for (i in 0 until workflows.length()) {
+                val wf = workflows.getJSONObject(i)
+                val wfName = wf.getString("name").lowercase()
+                val wfPath = wf.getString("path").lowercase()
+                if (isRelease && (wfName.contains("release") || wfPath.contains("release"))) {
+                    workflowId = wf.getLong("id")
+                    break
+                }
+                if (!isRelease && !wfName.contains("release") && !wfPath.contains("release")) {
+                    workflowId = wf.getLong("id")
+                    break
+                }
+            }
+            // Fallback to first workflow
+            if (workflowId == null) {
+                workflowId = workflows.getJSONObject(0).getLong("id")
+            }
+
+            // Determine branch name
+            val branch = getDefaultBranch(repo)
 
             val dispatchUrl = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/actions/workflows/$workflowId/dispatches")
             val dispatchConn = dispatchUrl.openConnection() as HttpURLConnection
@@ -390,18 +411,61 @@ class GitHubApiService {
             dispatchConn.setRequestProperty("Content-Type", "application/json")
             dispatchConn.doOutput = true
 
-            val body = JSONObject().apply { put("ref", "main") }.toString()
+            val body = JSONObject().apply { put("ref", branch) }.toString()
             dispatchConn.outputStream.use { it.write(body.toByteArray()) }
 
             val code = dispatchConn.responseCode
             dispatchConn.disconnect()
 
             if (code in 200..299) {
-                Thread.sleep(3000)
-                getLatestRunId(repo)
+                Thread.sleep(5000)
+                getLatestDispatchRunId(repo)
             } else null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private fun getDefaultBranch(repo: GitHubRepo): String {
+        // Try 'main' first, then 'master'
+        for (branch in listOf("main", "master")) {
+            try {
+                val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/refs/heads/$branch")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("Authorization", "token ${repo.token}")
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code in 200..299) return branch
+            } catch (e: Exception) {}
+        }
+        return "main"
+    }
+
+    private fun getLatestDispatchRunId(repo: GitHubRepo): String? {
+        try {
+            // Filter by event=workflow_dispatch to get the run WE triggered
+            val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/actions/runs?per_page=5&event=workflow_dispatch")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Authorization", "token ${repo.token}")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+
+            val response = readResponse(conn)
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            val runs = json.getJSONArray("workflow_runs")
+            if (runs.length() == 0) {
+                // Fallback: get latest run of any type
+                return getLatestRunId(repo)
+            }
+            return runs.getJSONObject(0).getLong("id").toString()
+        } catch (e: Exception) {
+            return getLatestRunId(repo)
         }
     }
 
