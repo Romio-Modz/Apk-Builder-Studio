@@ -196,6 +196,16 @@ class MainViewModel : ViewModel() {
                         addLog("All ${fileDataList.size} files uploaded successfully!")
                     } else {
                         addLog("Warning: Some files may not have uploaded correctly")
+                        addLog("Trying alternative upload method...")
+                        // Fallback: try pushing files one by one using Contents API
+                        var successCount = 0
+                        for ((idx, fileData) in fileDataList.withIndex()) {
+                            val pushed = githubApi.pushSingleFileBytes(githubRepo, fileData.path, fileData.content)
+                            if (pushed) successCount++
+                            addLog("  [${idx + 1}/${fileDataList.size}] ${if (pushed) "OK" else "SKIP"} ${fileData.path}")
+                            _buildProgress.value = 30 + (idx * 25 / fileDataList.size)
+                        }
+                        addLog("Uploaded $successCount/${fileDataList.size} files via Contents API")
                     }
                 }
             }

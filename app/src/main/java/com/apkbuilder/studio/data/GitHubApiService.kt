@@ -77,6 +77,7 @@ class GitHubApiService {
 
             // Step 2: Create blobs for each file (handles large files up to 100MB)
             val treeItems = JSONArray()
+            var blobFailCount = 0
             for ((index, file) in files.withIndex()) {
                 onProgress(index, total, "Uploading: ${file.path}")
 
@@ -88,11 +89,21 @@ class GitHubApiService {
                     item.put("type", "blob")
                     item.put("sha", blobSha)
                     treeItems.put(item)
+                } else {
+                    blobFailCount++
+                }
+                // Small delay to avoid GitHub API rate limiting
+                if (index > 0 && index % 10 == 0) {
+                    Thread.sleep(500)
                 }
             }
 
             // Step 3: Create a tree with all blobs
             onProgress(total, total, "Creating commit tree...")
+            if (treeItems.length() == 0) {
+                onProgress(total, total, "No files were uploaded successfully")
+                return@withContext false
+            }
             val newTreeSha = createTree(repo, treeSha, treeItems) ?: return@withContext false
 
             // Step 4: Create a commit
@@ -105,6 +116,42 @@ class GitHubApiService {
             val updated = updateRef(repo, newCommitSha)
 
             updated
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Push a single binary file using the Contents API (alternative to Git Data API).
+     * Works for files up to 1MB. Used as fallback when pushAllFiles fails.
+     */
+    suspend fun pushSingleFileBytes(
+        repo: GitHubRepo,
+        path: String,
+        content: ByteArray
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val encodedPath = java.net.URLEncoder.encode(path, "UTF-8").replace("+", "%20")
+            val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/contents/$encodedPath")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "PUT"
+            conn.setRequestProperty("Authorization", "token ${repo.token}")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 30000
+            conn.readTimeout = 60000
+
+            val body = JSONObject().apply {
+                put("message", "Add $path")
+                put("content", Base64.encodeToString(content, Base64.NO_WRAP))
+            }.toString()
+
+            conn.outputStream.use { it.write(body.toByteArray()) }
+            val code = conn.responseCode
+            conn.disconnect()
+            code in 200..299 || code == 422
         } catch (e: Exception) {
             false
         }
@@ -141,22 +188,28 @@ class GitHubApiService {
     }
 
     private fun getRefSha(repo: GitHubRepo): String? {
-        try {
-            val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/refs/heads/main")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Authorization", "token ${repo.token}")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+        // Try 'main' first, then 'master' as fallback
+        for (branch in listOf("main", "master")) {
+            try {
+                val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/refs/heads/$branch")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("Authorization", "token ${repo.token}")
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                conn.setRequestProperty("User-Agent", "APKBuilderStudio")
 
-            val response = readResponse(conn)
-            conn.disconnect()
+                val response = readResponse(conn)
+                conn.disconnect()
 
-            val json = JSONObject(response)
-            return json.getJSONObject("object").getString("sha")
-        } catch (e: Exception) {
-            return null
+                if (conn.responseCode in 200..299) {
+                    val json = JSONObject(response)
+                    return json.getJSONObject("object").getString("sha")
+                }
+            } catch (e: Exception) {
+                // Try next branch
+            }
         }
+        return null
     }
 
     private fun getCommitTreeSha(repo: GitHubRepo, commitSha: String): String? {
@@ -179,31 +232,45 @@ class GitHubApiService {
     }
 
     private fun createBlob(repo: GitHubRepo, content: ByteArray): String? {
-        try {
-            val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/blobs")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Authorization", "token ${repo.token}")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
+        for (attempt in 0 until 3) {
+            try {
+                val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/blobs")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "token ${repo.token}")
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.connectTimeout = 30000
+                conn.readTimeout = 60000
 
-            val body = JSONObject().apply {
-                put("content", Base64.encodeToString(content, Base64.NO_WRAP))
-                put("encoding", "base64")
-            }.toString()
+                val body = JSONObject().apply {
+                    put("content", Base64.encodeToString(content, Base64.NO_WRAP))
+                    put("encoding", "base64")
+                }.toString()
 
-            conn.outputStream.use { it.write(body.toByteArray()) }
+                conn.outputStream.use { it.write(body.toByteArray()) }
 
-            val response = readResponse(conn)
-            conn.disconnect()
+                val response = readResponse(conn)
+                val code = conn.responseCode
+                conn.disconnect()
 
-            val json = JSONObject(response)
-            return json.getString("sha")
-        } catch (e: Exception) {
-            return null
+                if (code in 200..299) {
+                    val json = JSONObject(response)
+                    return json.getString("sha")
+                } else if (code == 403) {
+                    // Rate limited - wait and retry
+                    Thread.sleep(2000L * (attempt + 1))
+                } else {
+                    return null
+                }
+            } catch (e: Exception) {
+                if (attempt == 2) return null
+                Thread.sleep(1000L * (attempt + 1))
+            }
         }
+        return null
     }
 
     private fun createTree(repo: GitHubRepo, baseTreeSha: String, treeItems: JSONArray): String? {
@@ -267,29 +334,33 @@ class GitHubApiService {
     }
 
     private fun updateRef(repo: GitHubRepo, commitSha: String): Boolean {
-        try {
-            val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/refs/heads/main")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "PATCH"
-            conn.setRequestProperty("Authorization", "token ${repo.token}")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
+        // Try 'main' first, then 'master' as fallback
+        for (branch in listOf("main", "master")) {
+            try {
+                val url = URL("https://api.github.com/repos/${repo.owner}/${repo.name}/git/refs/heads/$branch")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.setRequestProperty("Authorization", "token ${repo.token}")
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
 
-            val body = JSONObject().apply {
-                put("sha", commitSha)
-                put("force", true)
-            }.toString()
+                val body = JSONObject().apply {
+                    put("sha", commitSha)
+                    put("force", true)
+                }.toString()
 
-            conn.outputStream.use { it.write(body.toByteArray()) }
+                conn.outputStream.use { it.write(body.toByteArray()) }
 
-            val code = conn.responseCode
-            conn.disconnect()
-            return code in 200..299
-        } catch (e: Exception) {
-            return false
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code in 200..299) return true
+            } catch (e: Exception) {
+                // Try next branch
+            }
         }
+        return false
     }
 
     suspend fun triggerWorkflow(repo: GitHubRepo): String? = withContext(Dispatchers.IO) {
