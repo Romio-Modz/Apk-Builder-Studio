@@ -345,13 +345,9 @@ jobs:
 
       - name: Find all APK files
         if: always()
-        id: find_apks
         run: |
           echo "Searching for APK files..."
           find . -name "*.apk" -type f | head -20
-          APK_COUNT=$(find . -name "*.apk" -type f | wc -l)
-          echo "Found $APK_COUNT APK files"
-          echo "apk_count=$APK_COUNT" >> $GITHUB_OUTPUT
 
       - name: Upload Debug APK
         if: always()
