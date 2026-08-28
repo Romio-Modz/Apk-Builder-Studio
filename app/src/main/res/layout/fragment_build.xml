@@ -434,6 +434,7 @@
                     android:layout_marginBottom="@dimen/spacing_xs" />
 
                 <androidx.core.widget.NestedScrollView
+                    android:id="@+id/scrollBuildLog"
                     android:layout_width="match_parent"
                     android:layout_height="200dp"
                     android:background="?attr/colorSurfaceVariant"

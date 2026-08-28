@@ -3,12 +3,12 @@ package com.apkbuilder.studio.ui
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
 import android.provider.OpenableColumns
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -190,11 +190,10 @@ class BuildFragment : Fragment() {
 
         binding.btnDownloadApk.setOnClickListener {
             val arts = viewModel.artifacts.value
-            // Filter out non-APK artifacts (like build-log) - prefer apk-debug, then apk-release, then any with apk in name
             val apkArtifact = arts.firstOrNull { it.name.contains("apk", ignoreCase = true) && !it.name.contains("log", ignoreCase = true) }
                 ?: arts.firstOrNull { !it.name.contains("log", ignoreCase = true) }
             if (apkArtifact != null) {
-                binding.btnDownloadApk.text = "Downloading..."
+                binding.btnDownloadApk.text = "Downloading APK..."
                 binding.btnDownloadApk.isEnabled = false
                 viewLifecycleOwner.lifecycleScope.launch {
                     val token = viewModel.githubToken.value
@@ -206,24 +205,33 @@ class BuildFragment : Fragment() {
                         return@launch
                     }
                     val githubRepo = com.apkbuilder.studio.data.GitHubRepo(user, repoName, token)
-                    // Save to app's files directory (no special permission needed on Android 10+)
-                    val outputDir = File(requireContext().getExternalFilesDir(null), "downloads")
+                    // Save to app's cache directory (no permissions needed, always writable)
+                    val outputDir = File(requireContext().cacheDir, "downloads")
                     outputDir.mkdirs()
+                    // Clean old APKs first
+                    outputDir.listFiles()?.forEach { if (it.name.endsWith(".apk")) it.delete() }
                     val apkFile = viewModel.githubApi.downloadApkArtifact(githubRepo, apkArtifact, outputDir)
                     if (apkFile != null && apkFile.exists()) {
                         binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                         binding.btnDownloadApk.isEnabled = true
-                        // Open install prompt
-                        val intent = Intent(Intent.ACTION_VIEW)
-                        intent.setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        startActivity(intent)
+                        // Open install prompt using FileProvider
+                        try {
+                            val apkUri = FileProvider.getUriForFile(
+                                requireContext(),
+                                "${requireContext().packageName}.fileprovider",
+                                apkFile
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW)
+                            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(requireContext(), "Downloaded to: ${apkFile.absolutePath}", android.widget.Toast.LENGTH_LONG).show()
+                        }
                     } else {
                         binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                         binding.btnDownloadApk.isEnabled = true
-                        // Fallback: open GitHub Actions page in browser
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/$user/$repoName/actions"))
-                        startActivity(intent)
+                        android.widget.Toast.makeText(requireContext(), "Download failed. Check your internet connection.", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -231,10 +239,9 @@ class BuildFragment : Fragment() {
 
         binding.btnDownloadLog.setOnClickListener {
             val arts = viewModel.artifacts.value
-            // Find build-log artifact
             val logArtifact = arts.firstOrNull { it.name.contains("log", ignoreCase = true) }
             if (logArtifact != null) {
-                binding.btnDownloadLog.text = "Downloading..."
+                binding.btnDownloadLog.text = "Downloading Log..."
                 binding.btnDownloadLog.isEnabled = false
                 viewLifecycleOwner.lifecycleScope.launch {
                     val token = viewModel.githubToken.value
@@ -246,20 +253,30 @@ class BuildFragment : Fragment() {
                         return@launch
                     }
                     val githubRepo = com.apkbuilder.studio.data.GitHubRepo(user, repoName, token)
-                    val outputDir = File(requireContext().getExternalFilesDir(null), "logs")
+                    val outputDir = File(requireContext().cacheDir, "logs")
                     outputDir.mkdirs()
+                    outputDir.listFiles()?.forEach { if (it.name.endsWith(".txt")) it.delete() }
                     val logFile = viewModel.githubApi.downloadLogArtifact(githubRepo, logArtifact, outputDir)
                     if (logFile != null && logFile.exists()) {
                         binding.btnDownloadLog.text = "Download Build Log"
                         binding.btnDownloadLog.isEnabled = true
-                        // Open with text viewer
-                        val intent = Intent(Intent.ACTION_VIEW)
-                        intent.setDataAndType(Uri.fromFile(logFile), "text/plain")
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        startActivity(intent)
+                        try {
+                            val logUri = FileProvider.getUriForFile(
+                                requireContext(),
+                                "${requireContext().packageName}.fileprovider",
+                                logFile
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW)
+                            intent.setDataAndType(logUri, "text/plain")
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(requireContext(), "Saved to: ${logFile.absolutePath}", android.widget.Toast.LENGTH_LONG).show()
+                        }
                     } else {
                         binding.btnDownloadLog.text = "Download Build Log"
                         binding.btnDownloadLog.isEnabled = true
+                        android.widget.Toast.makeText(requireContext(), "Log download failed.", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -402,6 +419,10 @@ class BuildFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.logLines.collect { lines ->
                     binding.tvBuildLog.text = lines.joinToString("\n")
+                    // Auto-scroll to bottom so latest log is always visible
+                    binding.scrollBuildLog.post {
+                        binding.scrollBuildLog.fullScroll(View.FOCUS_DOWN)
+                    }
                 }
             }
         }
