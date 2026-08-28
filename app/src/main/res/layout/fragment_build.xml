@@ -450,6 +450,16 @@
                     app:icon="@drawable/ic_build"
                     android:visibility="gone" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDownloadLog"
+                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Download Build Log"
+                    app:icon="@drawable/ic_file"
+                    android:visibility="gone" />
+
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

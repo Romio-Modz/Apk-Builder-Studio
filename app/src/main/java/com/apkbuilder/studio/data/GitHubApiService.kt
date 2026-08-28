@@ -591,6 +591,56 @@ class GitHubApiService {
         }
     }
 
+    /**
+     * Downloads the build-log artifact (a text file) and saves it to outputDir.
+     * Returns the saved .txt file, or null on failure.
+     */
+    suspend fun downloadLogArtifact(repo: GitHubRepo, artifact: ArtifactInfo, outputDir: File): File? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL(artifact.downloadUrl)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Authorization", "token ${repo.token}")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 30000
+            conn.readTimeout = 60000
+
+            if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                return@withContext null
+            }
+
+            // Build-log artifact is a ZIP containing a .txt file
+            val zipStream = ZipInputStream(conn.inputStream)
+            var logFile: File? = null
+            var entry = zipStream.nextEntry
+            while (entry != null) {
+                if (entry.name.endsWith(".txt")) {
+                    val fileName = File(entry.name).name
+                    val outFile = File(outputDir, fileName)
+                    FileOutputStream(outFile).use { fos ->
+                        val buffer = ByteArray(8192)
+                        var len: Int
+                        while (zipStream.read(buffer).also { len = it } > 0) {
+                            fos.write(buffer, 0, len)
+                        }
+                    }
+                    logFile = outFile
+                    break
+                }
+                zipStream.closeEntry()
+                entry = zipStream.nextEntry
+            }
+            zipStream.close()
+            conn.disconnect()
+            logFile
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun readResponse(conn: HttpURLConnection): String {
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
         val reader = BufferedReader(InputStreamReader(stream))

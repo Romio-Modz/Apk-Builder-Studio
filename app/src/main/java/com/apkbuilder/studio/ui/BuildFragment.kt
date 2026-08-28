@@ -182,6 +182,42 @@ class BuildFragment : Fragment() {
                 }
             }
         }
+
+        binding.btnDownloadLog.setOnClickListener {
+            val arts = viewModel.artifacts.value
+            // Find build-log artifact
+            val logArtifact = arts.firstOrNull { it.name.contains("log", ignoreCase = true) }
+            if (logArtifact != null) {
+                binding.btnDownloadLog.text = "Downloading..."
+                binding.btnDownloadLog.isEnabled = false
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val token = viewModel.githubToken.value
+                    val user = viewModel.githubUser.value
+                    val repoName = viewModel.repoName.value
+                    if (token.isEmpty() || user.isEmpty() || repoName.isEmpty()) {
+                        binding.btnDownloadLog.text = "Download Build Log"
+                        binding.btnDownloadLog.isEnabled = true
+                        return@launch
+                    }
+                    val githubRepo = com.apkbuilder.studio.data.GitHubRepo(user, repoName, token)
+                    val outputDir = File(requireContext().getExternalFilesDir(null), "logs")
+                    outputDir.mkdirs()
+                    val logFile = viewModel.githubApi.downloadLogArtifact(githubRepo, logArtifact, outputDir)
+                    if (logFile != null && logFile.exists()) {
+                        binding.btnDownloadLog.text = "Download Build Log"
+                        binding.btnDownloadLog.isEnabled = true
+                        // Open with text viewer
+                        val intent = Intent(Intent.ACTION_VIEW)
+                        intent.setDataAndType(Uri.fromFile(logFile), "text/plain")
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        startActivity(intent)
+                    } else {
+                        binding.btnDownloadLog.text = "Download Build Log"
+                        binding.btnDownloadLog.isEnabled = true
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -345,6 +381,13 @@ class BuildFragment : Fragment() {
                         binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
                     } else {
                         binding.btnDownloadApk.visibility = View.GONE
+                    }
+                    // Show Download Build Log button if build-log artifact exists
+                    val logArtifact = arts.firstOrNull { it.name.contains("log", ignoreCase = true) }
+                    if (logArtifact != null) {
+                        binding.btnDownloadLog.visibility = View.VISIBLE
+                    } else {
+                        binding.btnDownloadLog.visibility = View.GONE
                     }
                 }
             }
