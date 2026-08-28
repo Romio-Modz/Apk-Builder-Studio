@@ -181,6 +181,10 @@ class BuildFragment : Fragment() {
 
             val isRelease = binding.switchRelease.isChecked
             binding.buildProgressCard.visibility = View.VISIBLE
+            // Scroll the main page UP to show build progress card
+            binding.scrollView.post {
+                binding.scrollView.fullScroll(View.FOCUS_UP)
+            }
             viewModel.startRealBuild(requireContext(), isRelease)
         }
 
@@ -193,45 +197,48 @@ class BuildFragment : Fragment() {
             val apkArtifact = arts.firstOrNull { it.name.contains("apk", ignoreCase = true) && !it.name.contains("log", ignoreCase = true) }
                 ?: arts.firstOrNull { !it.name.contains("log", ignoreCase = true) }
             if (apkArtifact != null) {
-                binding.btnDownloadApk.text = "Downloading APK..."
+                binding.btnDownloadApk.text = "Downloading..."
                 binding.btnDownloadApk.isEnabled = false
                 viewLifecycleOwner.lifecycleScope.launch {
                     val token = viewModel.githubToken.value
                     val user = viewModel.githubUser.value
                     val repoName = viewModel.repoName.value
                     if (token.isEmpty() || user.isEmpty() || repoName.isEmpty()) {
-                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
+                        binding.btnDownloadApk.text = "Download ZIP"
                         binding.btnDownloadApk.isEnabled = true
                         return@launch
                     }
                     val githubRepo = com.apkbuilder.studio.data.GitHubRepo(user, repoName, token)
-                    // Save to app's cache directory (no permissions needed, always writable)
-                    val outputDir = File(requireContext().cacheDir, "downloads")
+                    // Save ZIP to Downloads folder (user extracts APK themselves)
+                    val outputDir = File(requireContext().getExternalFilesDir(null), "downloads")
                     outputDir.mkdirs()
-                    // Clean old APKs first
-                    outputDir.listFiles()?.forEach { if (it.name.endsWith(".apk")) it.delete() }
-                    val apkFile = viewModel.githubApi.downloadApkArtifact(githubRepo, apkArtifact, outputDir)
-                    if (apkFile != null && apkFile.exists()) {
-                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
+                    val zipFile = viewModel.githubApi.downloadArtifactZip(githubRepo, apkArtifact, outputDir)
+                    if (zipFile != null && zipFile.exists()) {
+                        binding.btnDownloadApk.text = "Download ZIP"
                         binding.btnDownloadApk.isEnabled = true
-                        // Open install prompt using FileProvider
+                        android.widget.Toast.makeText(
+                            requireContext(),
+                            "ZIP saved! Check Files > Android > data > com.apkbuilder.studio > files > downloads\nExtract it to get the APK.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        // Open the ZIP file with a file viewer
                         try {
-                            val apkUri = FileProvider.getUriForFile(
+                            val zipUri = FileProvider.getUriForFile(
                                 requireContext(),
                                 "${requireContext().packageName}.fileprovider",
-                                apkFile
+                                zipFile
                             )
                             val intent = Intent(Intent.ACTION_VIEW)
-                            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+                            intent.setDataAndType(zipUri, "application/zip")
                             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
                             startActivity(intent)
                         } catch (e: Exception) {
-                            android.widget.Toast.makeText(requireContext(), "Downloaded to: ${apkFile.absolutePath}", android.widget.Toast.LENGTH_LONG).show()
+                            // No zip viewer available, just show toast with path
                         }
                     } else {
-                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
+                        binding.btnDownloadApk.text = "Download ZIP"
                         binding.btnDownloadApk.isEnabled = true
-                        android.widget.Toast.makeText(requireContext(), "Download failed. Check your internet connection.", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(requireContext(), "Download failed. Check internet connection.", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -419,9 +426,9 @@ class BuildFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.logLines.collect { lines ->
                     binding.tvBuildLog.text = lines.joinToString("\n")
-                    // Auto-scroll to bottom so latest log is always visible
+                    // Keep scroll at TOP so build progress and status are always visible
                     binding.scrollBuildLog.post {
-                        binding.scrollBuildLog.fullScroll(View.FOCUS_DOWN)
+                        binding.scrollBuildLog.fullScroll(View.FOCUS_UP)
                     }
                 }
             }
@@ -445,7 +452,7 @@ class BuildFragment : Fragment() {
                         ?: arts.firstOrNull { !it.name.contains("log", ignoreCase = true) }
                     if (apkArtifact != null) {
                         binding.btnDownloadApk.visibility = View.VISIBLE
-                        binding.btnDownloadApk.text = "Download APK (${apkArtifact.name})"
+                        binding.btnDownloadApk.text = "Download ZIP"
                     } else {
                         binding.btnDownloadApk.visibility = View.GONE
                     }

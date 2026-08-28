@@ -574,7 +574,7 @@ class GitHubApiService {
      * Downloads an artifact ZIP from GitHub API, extracts the APK file from it,
      * and saves it to the outputDir. Returns the saved APK file, or null on failure.
      */
-    suspend fun downloadApkArtifact(repo: GitHubRepo, artifact: ArtifactInfo, outputDir: File): File? = withContext(Dispatchers.IO) {
+    suspend fun downloadArtifactZip(repo: GitHubRepo, artifact: ArtifactInfo, outputDir: File): File? = withContext(Dispatchers.IO) {
         try {
             outputDir.mkdirs()
 
@@ -611,9 +611,10 @@ class GitHubApiService {
                 return@withContext null
             }
 
-            // Save the ZIP to a temp file first (streaming large ZIPs can fail)
-            val tempZip = File(outputDir, "artifact_download.zip")
-            FileOutputStream(tempZip).use { fos ->
+            // Save the ZIP file directly (user will extract APK themselves)
+            val zipFileName = "${artifact.name}.zip"
+            val zipFile = File(outputDir, zipFileName)
+            FileOutputStream(zipFile).use { fos ->
                 val buffer = ByteArray(8192)
                 var len: Int
                 val input = blobConn.inputStream
@@ -622,32 +623,7 @@ class GitHubApiService {
                 }
             }
             blobConn.disconnect()
-
-            // Extract APK from the downloaded ZIP
-            var apkFile: File? = null
-            val zipStream = ZipInputStream(java.io.FileInputStream(tempZip))
-            var entry = zipStream.nextEntry
-            while (entry != null) {
-                val entryName = entry.name.toLowerCase()
-                if (entryName.endsWith(".apk")) {
-                    val apkName = File(entry.name).name
-                    val outFile = File(outputDir, apkName)
-                    FileOutputStream(outFile).use { fos ->
-                        val buffer = ByteArray(8192)
-                        var len: Int
-                        while (zipStream.read(buffer).also { len = it } > 0) {
-                            fos.write(buffer, 0, len)
-                        }
-                    }
-                    apkFile = outFile
-                    break
-                }
-                zipStream.closeEntry()
-                entry = zipStream.nextEntry
-            }
-            zipStream.close()
-            tempZip.delete()
-            apkFile
+            zipFile
         } catch (e: Exception) {
             null
         }
