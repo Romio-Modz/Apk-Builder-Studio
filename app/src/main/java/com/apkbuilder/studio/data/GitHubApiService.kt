@@ -576,28 +576,60 @@ class GitHubApiService {
      */
     suspend fun downloadApkArtifact(repo: GitHubRepo, artifact: ArtifactInfo, outputDir: File): File? = withContext(Dispatchers.IO) {
         try {
-            // GitHub artifact download URL returns a ZIP file containing the artifact
-            val url = URL(artifact.downloadUrl)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Authorization", "token ${repo.token}")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
-            conn.instanceFollowRedirects = true
-            conn.connectTimeout = 30000
-            conn.readTimeout = 120000
+            outputDir.mkdirs()
 
-            if (conn.responseCode !in 200..299) {
-                conn.disconnect()
+            // Step 1: Request the download URL from GitHub API (returns 302 redirect to Azure blob)
+            val apiUrl = URL(artifact.downloadUrl)
+            val apiConn = apiUrl.openConnection() as HttpURLConnection
+            apiConn.requestMethod = "GET"
+            apiConn.setRequestProperty("Authorization", "token ${repo.token}")
+            apiConn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            apiConn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            apiConn.instanceFollowRedirects = false
+            apiConn.connectTimeout = 30000
+            apiConn.readTimeout = 30000
+
+            // Get the redirect URL (Location header)
+            val redirectUrl = apiConn.getHeaderField("Location")
+            apiConn.disconnect()
+
+            if (redirectUrl == null) {
                 return@withContext null
             }
 
-            // Read the ZIP input stream and extract .apk files from it
-            val zipStream = ZipInputStream(conn.inputStream)
+            // Step 2: Download from Azure blob storage (NO Authorization header)
+            val blobUrl = URL(redirectUrl)
+            val blobConn = blobUrl.openConnection() as HttpURLConnection
+            blobConn.requestMethod = "GET"
+            blobConn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            blobConn.instanceFollowRedirects = true
+            blobConn.connectTimeout = 30000
+            blobConn.readTimeout = 300000  // 5 minutes for large files
+
+            if (blobConn.responseCode !in 200..299) {
+                blobConn.disconnect()
+                return@withContext null
+            }
+
+            // Save the ZIP to a temp file first (streaming large ZIPs can fail)
+            val tempZip = File(outputDir, "artifact_download.zip")
+            FileOutputStream(tempZip).use { fos ->
+                val buffer = ByteArray(8192)
+                var len: Int
+                val input = blobConn.inputStream
+                while (input.read(buffer).also { len = it } > 0) {
+                    fos.write(buffer, 0, len)
+                }
+            }
+            blobConn.disconnect()
+
+            // Extract APK from the downloaded ZIP
             var apkFile: File? = null
+            val zipStream = ZipInputStream(java.io.FileInputStream(tempZip))
             var entry = zipStream.nextEntry
             while (entry != null) {
-                if (entry.name.endsWith(".apk")) {
+                val entryName = entry.name.toLowerCase()
+                if (entryName.endsWith(".apk")) {
                     val apkName = File(entry.name).name
                     val outFile = File(outputDir, apkName)
                     FileOutputStream(outFile).use { fos ->
@@ -614,7 +646,7 @@ class GitHubApiService {
                 entry = zipStream.nextEntry
             }
             zipStream.close()
-            conn.disconnect()
+            tempZip.delete()
             apkFile
         } catch (e: Exception) {
             null
@@ -627,23 +659,52 @@ class GitHubApiService {
      */
     suspend fun downloadLogArtifact(repo: GitHubRepo, artifact: ArtifactInfo, outputDir: File): File? = withContext(Dispatchers.IO) {
         try {
-            val url = URL(artifact.downloadUrl)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Authorization", "token ${repo.token}")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "APKBuilderStudio")
-            conn.instanceFollowRedirects = true
-            conn.connectTimeout = 30000
-            conn.readTimeout = 60000
+            outputDir.mkdirs()
 
-            if (conn.responseCode !in 200..299) {
-                conn.disconnect()
+            // Step 1: Get redirect URL from GitHub API
+            val apiUrl = URL(artifact.downloadUrl)
+            val apiConn = apiUrl.openConnection() as HttpURLConnection
+            apiConn.requestMethod = "GET"
+            apiConn.setRequestProperty("Authorization", "token ${repo.token}")
+            apiConn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            apiConn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            apiConn.instanceFollowRedirects = false
+            apiConn.connectTimeout = 30000
+            apiConn.readTimeout = 30000
+
+            val redirectUrl = apiConn.getHeaderField("Location")
+            apiConn.disconnect()
+
+            if (redirectUrl == null) return@withContext null
+
+            // Step 2: Download from Azure blob (NO auth header)
+            val blobUrl = URL(redirectUrl)
+            val blobConn = blobUrl.openConnection() as HttpURLConnection
+            blobConn.requestMethod = "GET"
+            blobConn.setRequestProperty("User-Agent", "APKBuilderStudio")
+            blobConn.instanceFollowRedirects = true
+            blobConn.connectTimeout = 30000
+            blobConn.readTimeout = 120000
+
+            if (blobConn.responseCode !in 200..299) {
+                blobConn.disconnect()
                 return@withContext null
             }
 
-            // Build-log artifact is a ZIP containing a .txt file
-            val zipStream = ZipInputStream(conn.inputStream)
+            // Save ZIP to temp file
+            val tempZip = File(outputDir, "log_download.zip")
+            FileOutputStream(tempZip).use { fos ->
+                val buffer = ByteArray(8192)
+                var len: Int
+                val input = blobConn.inputStream
+                while (input.read(buffer).also { len = it } > 0) {
+                    fos.write(buffer, 0, len)
+                }
+            }
+            blobConn.disconnect()
+
+            // Extract .txt from ZIP
+            val zipStream = ZipInputStream(java.io.FileInputStream(tempZip))
             var logFile: File? = null
             var entry = zipStream.nextEntry
             while (entry != null) {
@@ -664,7 +725,7 @@ class GitHubApiService {
                 entry = zipStream.nextEntry
             }
             zipStream.close()
-            conn.disconnect()
+            tempZip.delete()
             logFile
         } catch (e: Exception) {
             null
