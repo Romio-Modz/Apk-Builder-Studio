@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.util.Log
 
 data class FileEntry(
     val name: String,
@@ -28,6 +29,7 @@ data class FileEntry(
 
 class MainViewModel : ViewModel() {
 
+    private val TAG = "MainViewModel"
     private val repository = BuildRepository.getInstance()
     val githubApi = GitHubApiService()
 
@@ -110,13 +112,56 @@ class MainViewModel : ViewModel() {
     }
 
     private fun stripRootFolder(path: String): String {
-        // If path has a top-level folder like "ROMITUBE/app/build.gradle.kts",
-        // strip the first folder to get "app/build.gradle.kts"
         val parts = path.split("/")
         if (parts.size > 1) {
             return parts.drop(1).joinToString("/")
         }
         return path
+    }
+
+    /**
+     * BUILD ARTIFACT FILTER
+     * Filters out build artifacts, IDE files, and other junk that should NOT be uploaded.
+     * This prevents 712-file ZIPs from uploading 644 useless files.
+     */
+    private fun isBuildArtifact(path: String): Boolean {
+        val lowerPath = path.lowercase()
+
+        // Build directories
+        if (lowerPath.startsWith("build/") || lowerPath.contains("/build/")) return true
+        if (lowerPath.startsWith(".gradle/") || lowerPath.contains("/.gradle/")) return true
+        if (lowerPath.startsWith(".idea/") || lowerPath.contains("/.idea/")) return true
+        if (lowerPath.startsWith(".acside/") || lowerPath.contains("/.acside/")) return true
+
+        // Compiled files
+        if (lowerPath.endsWith(".class")) return true
+        if (lowerPath.endsWith(".dex")) return true
+        if (lowerPath.endsWith(".apk")) return true
+        if (lowerPath.endsWith(".iml")) return true
+
+        // Android resource cache
+        if (lowerPath.endsWith(".flat")) return true
+        if (lowerPath.endsWith(".arsc.flat")) return true
+
+        // JAR files (except in /libs/ — those are needed)
+        if (lowerPath.endsWith(".jar") && !lowerPath.contains("/libs/")) return true
+
+        // ZIP files (except in src/ — those might be needed)
+        if (lowerPath.endsWith(".zip") && !lowerPath.contains("/src/")) return true
+
+        // Local config
+        if (lowerPath == "local.properties") return true
+
+        // Cache directories
+        if (lowerPath.contains("zip-cache") || lowerPath.contains("build-cache")) return true
+
+        // OS junk
+        if (lowerPath.endsWith(".ds_store") || lowerPath.endsWith("thumbs.db")) return true
+
+        // macOS folder
+        if (lowerPath.startsWith("__macosx/") || lowerPath.contains("/__macosx/")) return true
+
+        return false
     }
 
     fun startRealBuild(context: Context, isRelease: Boolean) {
@@ -140,11 +185,25 @@ class MainViewModel : ViewModel() {
                 return@launch
             }
 
+            // ====== STEP 0: TOKEN VALIDATION ======
+            addLog("Validating GitHub token...")
+            _buildProgress.value = 2
+            val tokenValid = githubApi.validateToken(token)
+            if (!tokenValid) {
+                addLog("Error: GitHub token is INVALID or EXPIRED!")
+                addLog("Please generate a new token at github.com/settings/tokens")
+                addLog("Token needs: repo, workflow scopes")
+                _buildStatus.value = "Failed"
+                _isBuilding.value = false
+                return@launch
+            }
+            addLog("Token is valid!")
+            _buildProgress.value = 5
+
             val githubRepo = GitHubRepo(owner = user, name = repo, token = token)
 
-            // Step 1: Create repo
+            // ====== STEP 1: CREATE REPO ======
             addLog("Creating repository $repo...")
-            _buildProgress.value = 5
             val repoCreated = githubApi.createRepo(githubRepo)
             if (repoCreated) {
                 addLog("Repository ready: $repo")
@@ -153,18 +212,23 @@ class MainViewModel : ViewModel() {
             }
             _buildProgress.value = 10
 
-            // Step 2: Push uploaded files using Git Data API (handles large files up to 100MB)
+            // ====== STEP 2: PUSH UPLOADED FILES ======
             val files = _uploadedFiles.value
             if (files.isNotEmpty()) {
-                addLog("Preparing ${files.size} files for upload...")
-                
-                // Read all files - each file's path now points to an extracted temp file
+                // FILTER: Remove build artifacts before upload
+                val filteredFiles = files.filterNot { isBuildArtifact(stripRootFolder(it.name)) }
+                val skippedCount = files.size - filteredFiles.size
+                if (skippedCount > 0) {
+                    addLog("Filtered out $skippedCount build artifact files (build/, .gradle/, .idea/, etc.)")
+                }
+                addLog("Preparing ${filteredFiles.size} files for upload...")
+
+                // Read all files into FileData
                 val fileDataList = mutableListOf<FileData>()
-                for (file in files) {
+                for (file in filteredFiles) {
                     val cleanPath = stripRootFolder(file.name)
                     val bytes = withContext(Dispatchers.IO) {
                         try {
-                            // Read from temp file path (extracted ZIP entry or copied file)
                             val tempFile = java.io.File(file.path)
                             if (tempFile.exists() && tempFile.length() > 0) {
                                 tempFile.readBytes()
@@ -176,18 +240,21 @@ class MainViewModel : ViewModel() {
                                     b
                                 } else null
                             } else null
-                        } catch (e: Exception) { null }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Could not read file: ${file.name}", e)
+                            null
+                        }
                     }
                     if (bytes != null) {
                         fileDataList.add(FileData(cleanPath, bytes, true))
                     } else {
                         addLog("  Skipped (could not read): ${file.name}")
                     }
-                    _buildProgress.value = 10 + (fileDataList.size * 20 / files.size)
+                    _buildProgress.value = 10 + (fileDataList.size * 20 / filteredFiles.size)
                 }
 
                 if (fileDataList.isNotEmpty()) {
-                    addLog("Uploading ${fileDataList.size} files to GitHub...")
+                    addLog("Uploading ${fileDataList.size} files to GitHub (parallel, 5x speed)...")
                     val pushSuccess = githubApi.pushAllFiles(githubRepo, fileDataList) { current, total, msg ->
                         addLog("  [$current/$total] $msg")
                         _buildProgress.value = 30 + (current * 25 / total)
@@ -195,14 +262,15 @@ class MainViewModel : ViewModel() {
                     if (pushSuccess) {
                         addLog("All ${fileDataList.size} files uploaded successfully!")
                     } else {
-                        addLog("Warning: Some files may not have uploaded correctly")
-                        addLog("Trying alternative upload method...")
-                        // Fallback: try pushing files one by one using Contents API
+                        addLog("Git Data API failed, trying Contents API fallback...")
                         var successCount = 0
                         for ((idx, fileData) in fileDataList.withIndex()) {
                             val pushed = githubApi.pushSingleFileBytes(githubRepo, fileData.path, fileData.content)
                             if (pushed) successCount++
-                            addLog("  [${idx + 1}/${fileDataList.size}] ${if (pushed) "OK" else "SKIP"} ${fileData.path}")
+                            // Log every 20th file to reduce spam
+                            if (idx % 20 == 0 || idx == fileDataList.size - 1) {
+                                addLog("  [${idx + 1}/${fileDataList.size}] ${if (pushed) "OK" else "SKIP"} ${fileData.path}")
+                            }
                             _buildProgress.value = 30 + (idx * 25 / fileDataList.size)
                         }
                         addLog("Uploaded $successCount/${fileDataList.size} files via Contents API")
@@ -211,9 +279,9 @@ class MainViewModel : ViewModel() {
             }
             _buildProgress.value = 55
 
-            // Step 3: Push workflow file (only if not already in uploaded files)
-            val hasWorkflow = files.any { 
-                stripRootFolder(it.name).startsWith(".github/workflows/") && it.name.endsWith(".yml") 
+            // ====== STEP 3: PUSH WORKFLOW FILE ======
+            val hasWorkflow = files.any {
+                stripRootFolder(it.name).startsWith(".github/workflows/") && it.name.endsWith(".yml")
             }
             if (hasWorkflow) {
                 addLog("Workflow already exists in uploaded files - skipping")
@@ -234,7 +302,7 @@ class MainViewModel : ViewModel() {
             }
             _buildProgress.value = 65
 
-            // Step 4: Trigger workflow
+            // ====== STEP 4: TRIGGER WORKFLOW ======
             addLog("Triggering build on GitHub Actions...")
             val runId = githubApi.triggerWorkflow(githubRepo, isRelease)
             if (runId != null) {
@@ -249,16 +317,18 @@ class MainViewModel : ViewModel() {
             }
             _buildProgress.value = 70
 
-            // Step 5: Poll for build status
+            // ====== STEP 5: POLL FOR BUILD STATUS ======
             addLog("Waiting for build to complete...")
+            // FIX: Increased from 40 (10 min) to 80 (20 min) for large projects
             var pollCount = 0
-            while (pollCount < 40) {
+            val maxPolls = 80
+            while (pollCount < maxPolls) {
                 kotlinx.coroutines.delay(15000)
                 pollCount++
                 val statusResult = githubApi.getRunStatus(githubRepo, runId)
                 if (statusResult != null) {
                     val (status, conclusion) = statusResult
-                    val progress = 70 + (pollCount * 25 / 40)
+                    val progress = 70 + (pollCount * 25 / maxPolls)
                     _buildProgress.value = minOf(progress, 95)
                     addLog("  Build status: $status" + if (conclusion != "null") " ($conclusion)" else "")
 
@@ -268,7 +338,6 @@ class MainViewModel : ViewModel() {
                             _buildStatus.value = "Success"
                             addLog("Build completed successfully!")
 
-                            // Get artifacts
                             val arts = githubApi.getArtifacts(githubRepo, runId)
                             if (arts != null && arts.isNotEmpty()) {
                                 _artifacts.value = arts
@@ -278,21 +347,19 @@ class MainViewModel : ViewModel() {
                                 }
                             }
                         } else if (conclusion == "cancelled") {
-                            // The workflow_dispatch run was cancelled (likely because push triggered a duplicate)
-                            // Check the latest run of any type - it might be the push-triggered run that's actually building
+                            // Dispatch run was cancelled — check for push-triggered run
                             addLog("Run was cancelled, checking for push-triggered run...")
                             val altRunId = githubApi.getLatestRunId(githubRepo)
                             if (altRunId != null && altRunId != runId) {
                                 addLog("Found alternative run: $altRunId")
-                                // Poll the alternative run
                                 var altPollCount = 0
-                                while (altPollCount < 40) {
+                                while (altPollCount < maxPolls) {
                                     kotlinx.coroutines.delay(15000)
                                     altPollCount++
                                     val altStatus = githubApi.getRunStatus(githubRepo, altRunId)
                                     if (altStatus != null) {
                                         val (altS, altC) = altStatus
-                                        val altProgress = 70 + (altPollCount * 25 / 40)
+                                        val altProgress = 70 + (altPollCount * 25 / maxPolls)
                                         _buildProgress.value = minOf(altProgress, 95)
                                         addLog("  Build status: $altS" + if (altC != "null") " ($altC)" else "")
                                         if (altS == "completed") {
@@ -329,24 +396,27 @@ class MainViewModel : ViewModel() {
                 }
             }
 
-            if (pollCount >= 40) {
+            if (pollCount >= maxPolls) {
                 _buildStatus.value = "Timeout"
-                addLog("Build is taking too long. Check Actions tab on GitHub.")
+                addLog("Build is taking too long (20+ minutes). Check Actions tab on GitHub.")
             }
 
             _isBuilding.value = false
         }
     }
 
+    /**
+     * Generates the GitHub Actions workflow YAML.
+     * FIX: Removed `on: push` trigger — only `workflow_dispatch`.
+     * This prevents duplicate runs (push + dispatch) that cause cancellation.
+     * FIX: Uses ./gradlew with fallback to gradle (instead of always gradle).
+     */
     private fun generateWorkflow(isRelease: Boolean): String {
         val buildTask = if (isRelease) "assembleRelease" else "assembleDebug"
-        val apkPath = if (isRelease) "app/build/outputs/apk/release/*.apk" else "app/build/outputs/apk/debug/*.apk"
         val artifactName = if (isRelease) "apk-release" else "apk-debug"
         return """name: Build APK
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -392,7 +462,7 @@ jobs:
           echo "Searching for APK files..."
           find . -name "*.apk" -type f | head -20
 
-      - name: Upload Debug APK
+      - name: Upload APK Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
